@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv/
+venv/
+*.db
+
+# Flutter
+dostavka_app/.dart_tool/
+dostavka_app/.packages
+dostavka_app/build/
+dostavka_app/.flutter-plugins
+dostavka_app/.flutter-plugins-dependencies
+dostavka_app/pubspec.lock
+dostavka_app/android/.gradle/
+dostavka_app/android/local.properties
+dostavka_app/android/key.properties
+dostavka_app/ios/Pods/
+dostavka_app/ios/.symlinks/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Other
+*.log
