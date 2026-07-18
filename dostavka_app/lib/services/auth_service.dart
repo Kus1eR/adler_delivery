@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'foreground_service.dart';
 
 class AuthService extends ChangeNotifier {
   final ApiService _api = ApiService();
@@ -15,6 +17,15 @@ class AuthService extends ChangeNotifier {
   int? get courierId => _courierId;
   bool get isLoggedIn => _token != null;
   bool get isLoading => _isLoading;
+
+  Map<String, dynamic> _decodeJwt(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) return {};
+    final payload = parts[1];
+    final normalized = base64.normalize(payload);
+    final decoded = utf8.decode(base64.decode(normalized));
+    return jsonDecode(decoded) as Map<String, dynamic>;
+  }
 
   Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -53,11 +64,20 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> _saveSession(Map<String, dynamic> data) async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = data['access_token'] as String?;
-    _role = data['role'] as String?;
-    _courierId = data['courier_id'] as int?;
+    final tokenStr = data['access_token'] as String?;
 
+    Map<String, dynamic> jwtPayload = {};
+    if (tokenStr != null) {
+      jwtPayload = _decodeJwt(tokenStr);
+    }
+
+    _token = tokenStr;
+    _role = (data['role'] ?? jwtPayload['role']) as String?;
+
+    final rawUserId = data['user_id'] ?? jwtPayload['sub'];
+    _courierId = rawUserId is int ? rawUserId : int.tryParse(rawUserId?.toString() ?? '');
+
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', _token ?? '');
     await prefs.setString('role', _role ?? '');
     if (_courierId != null) {
@@ -69,6 +89,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await ForegroundServiceManager.stop();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('role');

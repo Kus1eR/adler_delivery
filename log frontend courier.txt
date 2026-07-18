@@ -1,0 +1,98 @@
+========================================
+  ¦Ô¦Þ¦á¦â¦Ð¦Ò¦Ú¦Ð - Backend + Flutter
+========================================
+
+[1/2] ¦×¦-¦¬TÃTÁ¦¦ ¦-TÍ¦¦¦¦¦-¦+¦-...
+¦Ö¦+TÑ¦- 5 TÁ¦¦¦¦TÃ¦-¦+ ¦¬¦-¦¦¦- ¦-TÍ¦¦¦¦¦-¦+ TÁTÂ¦-TÀTÂTÃ¦¦TÂ...
+[2/2] ¦×¦-¦¬TÃTÁ¦¦ Flutter...
+Resolving dependencies...
+Downloading packages...
+  flutter_local_notifications 18.0.1 (22.0.1 available)
+  flutter_local_notifications_linux 5.0.0 (8.0.1 available)
+  flutter_local_notifications_platform_interface 8.0.0 (12.0.0 available)
+  flutter_map 7.0.2 (8.3.1 available)
+  geolocator 13.0.4 (14.0.3 available)
+  geolocator_android 4.6.2 (5.0.3 available)
+  latlong2 0.9.1 (0.10.1 available)
+  matcher 0.12.19 (0.12.20 available)
+  meta 1.18.0 (1.19.0 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  test_api 0.7.11 (0.7.13 available)
+  timezone 0.10.1 (0.11.1 available)
+  unicode 0.3.1 (1.1.9 available)
+  uuid 4.5.3 (4.6.0 available)
+  vector_math 2.2.0 (2.4.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Launching lib\main.dart on STK LX1 in debug mode...
+Running Gradle task 'assembleDebug'...                              4,8s
+v Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           7,3s
+I/FlutterActivityAndFragmentDelegate( 2129): If you are attempting to set --enable-dart-profiling via Intent extras to launch a Flutter component outside of using the Flutter CLI, note that support for setting engine flags on Android via Intent will soon be dropped; see https://github.com/flutter/flutter/issues/180686 for more information on this breaking change. To migrate, set --enable-dart-profiling or any other flags specified via Intent extras on the command line instead or see https://github.com/flutter/flutter/blob/main/docs/engine/Flutter-Android-Engine-Flags.md for alternative methods.
+D/FlutterJNI( 2129): Beginning load of flutter...
+D/FlutterJNI( 2129): flutter (null) was loaded normally!
+I/flutter ( 2129): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+D/FlutterGeolocator( 2129): Attaching Geolocator to activity
+D/FlutterRenderer( 2129): Width is zero. 0,0
+D/FlutterRenderer( 2129): Width is zero. 0,0
+D/FlutterJNI( 2129): Sending viewport metrics to the engine.
+D/mali_winsys( 2129): EGLint new_window_surface(egl_winsys_display *, void *, EGLSurface, EGLConfig, egl_winsys_surface **, EGLBoolean) returns 0x3000
+D/mali_winsys( 2129): EGLint new_window_surface(egl_winsys_display *, void *, EGLSurface, EGLConfig, egl_winsys_surface **, EGLBoolean) returns 0x3000
+Syncing files to device STK LX1...                                 202ms
+
+Flutter run key commands.
+r Hot reload.
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on STK LX1 is available at: http://127.0.0.1:49787/v2qo8wAtB6s=/
+The Flutter DevTools debugger and profiler on STK LX1 is available at:
+http://127.0.0.1:49787/v2qo8wAtB6s=/devtools/?uri=ws://127.0.0.1:49787/v2qo8wAtB6s=/ws
+W/libEGL  ( 2129): EGLNativeWindowType 0x77324d0010 disconnect failed
+D/mali_winsys( 2129): EGLint new_window_surface(egl_winsys_display *, void *, EGLSurface, EGLConfig, egl_winsys_surface **, EGLBoolean) returns 0x3000
+D/FlutterGeolocator( 2129): Creating service.
+D/FlutterGeolocator( 2129): Binding to location service.
+I/Choreographer( 2129): Skipped 128 frames!  The application may be doing too much work on its main thread.
+D/FlutterGeolocator( 2129): Geolocator foreground service connected
+D/FlutterGeolocator( 2129): Initializing Geolocator services
+D/FlutterGeolocator( 2129): Flutter engine connected. Connected engine count 1
+I/flutter ( 2129): ? Foreground channel created
+I/flutter ( 2129): ? Orders channel created
+D/FlutterJNI( 2129): Sending viewport metrics to the engine.
+I/flutter ( 2129): ? Service configured
+I/flutter ( 2129): ? Foreground service initialized
+W/Gralloc3( 2129): mapper 3.x is not supported
+E/        ( 2129): APS:IFLoad:importExternalFunctions, search function createNewHwApsUtils failed, dlsym err:undefined symbol: createNewHwApsUtils
+D/        ( 2129): APS:importExternalFunctions OK
+V/BackgroundService( 2129): Starting flutter engine for background service
+I/flutter ( 2129): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+I/flutter ( 2129): ?? onStart() ENTRY
+V/BackgroundService( 2129): Service already running, using existing service
+I/Choreographer( 2129): Skipped 196 frames!  The application may be doing too much work on its main thread.
+I/OpenGLRenderer( 2129): Davey! duration=3321ms; Flags=0, IntendedVsync=30305194309204, Vsync=30308460975740, OldestInputEvent=9223372036854775807, NewestInputEvent=0, HandleInputStart=30308469179749, AnimationStart=30308469233916, PerformTraversalsStart=30308469236520, DrawStart=30308470524541, SyncQueued=30308472337041, SyncStart=30308472874541, IssueDrawCommandsStart=30308473441207, SwapBuffers=30308511229228, FrameCompleted=30308516530270, DequeueBufferDuration=4712000, QueueBufferDuration=1904000,
+D/AwareBitmapCacher( 2129): handleInit switch not opened pid=2129
+D/FlutterGeolocator( 2129): Geolocator foreground service connected
+D/FlutterGeolocator( 2129): Initializing Geolocator services
+D/FlutterGeolocator( 2129): Flutter engine connected. Connected engine count 2
+D/ProfileInstaller( 2129): Installing profile for com.example.dostavka_app
+I/flutter ( 2129): ? FLN initialized in isolate
+D/FlutterJNI( 2129): Sending viewport metrics to the engine.
+I/HwViewRootImpl( 2129): removeInvalidNode jank list is null
+I/flutter ( 2129): ?? Token: false (0 chars), Courier: null
+I/flutter ( 2129): ? onStart() — no token/courier, bailing
+I/Choreographer( 2129): Skipped 36 frames!  The application may be doing too much work on its main thread.
+V/AudioManager( 2129): querySoundEffectsEnabled...
+I/HwViewRootImpl( 2129): removeInvalidNode all the node in jank list is out of time
+D/FlutterJNI( 2129): Sending viewport metrics to the engine.
+V/AudioManager( 2129): querySoundEffectsEnabled...
+W/le.dostavka_ap( 2129): Accessing hidden method Landroid/view/View;->getViewRootImpl()Landroid/view/ViewRootImpl; (greylist, reflection, allowed)
+W/le.dostavka_ap( 2129): Accessing hidden field Landroid/view/View$AttachInfo;->mVisibleInsets:Landroid/graphics/Rect; (greylist, reflection, allowed)
+W/le.dostavka_ap( 2129): Accessing hidden field Landroid/view/ViewRootImpl;->mAttachInfo:Landroid/view/View$AttachInfo; (greylist, reflection, allowed)
+D/FlutterJNI( 2129): Sending viewport metrics to the engine.
+E/FlutterGeolocator( 2129): Geolocator position updates started

@@ -39,7 +39,7 @@ async def courier_login(body: CourierLogin, db: AsyncSession = Depends(get_db)):
     if courier.status == "blocked":
         raise HTTPException(status_code=403, detail="Courier blocked")
     token = create_access_token({"sub": courier.id, "role": "courier"})
-    return Token(access_token=token)
+    return Token(access_token=token, role="courier", user_id=courier.id)
 
 
 @router.get("/orders/available", response_model=list[OrderOut])
@@ -130,6 +130,7 @@ async def my_orders(
     result = await db.execute(
         select(Order)
         .where(Order.courier_id == courier.id)
+        .where(Order.status != "cancelled")
         .order_by(Order.created_at.desc())
     )
     return result.scalars().all()

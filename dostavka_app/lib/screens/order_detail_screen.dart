@@ -235,34 +235,17 @@ class OrderDetailScreen extends StatelessWidget {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.phone),
-                    label: Text('📞 Связаться с получателем — ${order.recipientPhone}'),
+                    icon: const Icon(Icons.support_agent),
+                    label: const Text('📞 Связаться с администратором'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade50,
-                      foregroundColor: Colors.green.shade800,
+                      backgroundColor: Colors.blue.shade50,
+                      foregroundColor: Colors.blue.shade800,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    onPressed: () => _showCallDialog(
-                      context, 'Получатель', order.recipientPhone),
+                    onPressed: () => _callAdmin(context),
                   ),
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.support_agent),
-                  label: const Text('📞 Связаться с администратором'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade50,
-                    foregroundColor: Colors.blue.shade800,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  onPressed: () => _callAdmin(context),
-                ),
-              ),
-            ),
           ],
         ),
       ),

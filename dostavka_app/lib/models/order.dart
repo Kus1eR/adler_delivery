@@ -54,6 +54,8 @@ class Order {
         return 'В пути';
       case 'delivered':
         return 'Доставлен';
+      case 'cancelled':
+        return 'Отменён';
       default:
         return status;
     }

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:dostavka_app/services/auth_service.dart';
 import 'package:dostavka_app/services/api_service.dart';
 import 'package:dostavka_app/utils/map_utils.dart';
@@ -16,7 +17,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final MapController _mapController = MapController();
+  MapController? _mapController;
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _orders = [];
   List<Map<String, dynamic>> _couriers = [];
@@ -26,12 +27,59 @@ class _MapScreenState extends State<MapScreen> {
   Map<String, dynamic>? _selectedCourier;
   List<Map<String, dynamic>> _searchResults = [];
   LatLng? _droppedMarker;
+  LatLng? _currentPosition;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
     _token = context.read<AuthService>().token;
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialize();
+    });
+  }
+
+  void _initialize() {
+    if (_initialized) return;
+    _initialized = true;
+    _mapController = MapController();
+    try {
+      _getCurrentPosition();
+      _loadData();
+    } catch (e) {
+      print('❌ MapScreen _initialize error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _getCurrentPosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+
+      final pos = await Geolocator.getCurrentPosition();
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(pos.latitude, pos.longitude);
+        });
+      }
+    } catch (e) {
+      print('❌ MapScreen getCurrentPosition error: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -45,14 +93,20 @@ class _MapScreenState extends State<MapScreen> {
         headers: {'Authorization': 'Bearer $_token'},
       );
 
+      if (ordersRes.statusCode != 200 || courierRes.statusCode != 200) {
+        print('❌ MapScreen _loadData HTTP error: orders=${ordersRes.statusCode} couriers=${courierRes.statusCode}');
+        throw Exception('Ошибка сервера: ${ordersRes.statusCode}');
+      }
+
       final allOrders = jsonDecode(ordersRes.body) as List;
       setState(() {
-        _orders = allOrders.where((o) => o['status'] != 'delivered').cast<Map<String, dynamic>>().toList();
+        _orders = allOrders.where((o) => o is Map && o['status'] != 'delivered').cast<Map<String, dynamic>>().toList();
         _couriers = (jsonDecode(courierRes.body) as List).cast<Map<String, dynamic>>();
         _loading = false;
       });
     } catch (e) {
-      setState(() => _loading = false);
+      print('❌ MapScreen _loadData error: $e');
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -92,9 +146,13 @@ class _MapScreenState extends State<MapScreen> {
       setState(() => _searchResults = []);
       return;
     }
-    final results = await searchAddress(query);
-    if (mounted) {
-      setState(() => _searchResults = results);
+    try {
+      final results = await searchAddress(query);
+      if (mounted) {
+        setState(() => _searchResults = results);
+      }
+    } catch (e) {
+      print('❌ MapScreen search error: $e');
     }
   }
 
@@ -112,14 +170,16 @@ class _MapScreenState extends State<MapScreen> {
         itemCount: _searchResults.length,
         itemBuilder: (ctx, i) {
           final result = _searchResults[i];
+          final dispName = result['display_name']?.toString().split(',').take(3).join(',') ?? '';
           return ListTile(
             leading: const Icon(Icons.location_on),
-            title: Text(result['display_name']?.toString().split(',').take(3).join(',') ?? ''),
+            title: Text(dispName),
             subtitle: Text(result['type']?.toString() ?? ''),
             onTap: () {
-              final lat = double.parse(result['lat']);
-              final lon = double.parse(result['lon']);
-              _mapController.move(LatLng(lat, lon), 16);
+              final lat = double.tryParse(result['lat']?.toString() ?? '');
+              final lon = double.tryParse(result['lon']?.toString() ?? '');
+              if (lat == null || lon == null) return;
+              _mapController?.move(LatLng(lat, lon), 16);
               setState(() => _searchResults = []);
             },
           );
@@ -163,118 +223,116 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_initialized || _loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Карта'), actions: [
         IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
       ]),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: const LatLng(43.5855, 39.7231),
-                    initialZoom: 12,
-                    onLongPress: (tapPosition, point) {
-                      _addMarker(point);
-                    },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.dostavka_app',
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController!,
+            options: MapOptions(
+              initialCenter: const LatLng(43.5855, 39.7231),
+              initialZoom: 12,
+              onLongPress: (tapPosition, point) {
+                _addMarker(point);
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.dostavka_app',
+              ),
+              MarkerLayer(
+                markers: [
+                  if (_droppedMarker != null)
+                    Marker(
+                      point: _droppedMarker!,
+                      child: const Icon(Icons.push_pin, color: Colors.red, size: 40),
                     ),
-                    MarkerLayer(
-                      markers: [
-                        if (_droppedMarker != null)
-                          Marker(
-                            point: _droppedMarker!,
-                            child: const Icon(Icons.push_pin, color: Colors.red, size: 40),
-                          ),
-                        ..._orders.map((order) => Marker(
-                          point: LatLng(
-                            (order['latitude'] as num).toDouble(),
-                            (order['longitude'] as num).toDouble(),
-                          ),
-                          child: GestureDetector(
-                            onTap: () => setState(() {
-                              _selectedOrder = order;
-                              _selectedCourier = null;
-                            }),
-                            child: Icon(
-                              Icons.room,
-                              color: _orderColor(order['status']),
-                              size: MapUtils.markerSize,
-                            ),
-                          ),
-                        )),
-                      ],
+                  ..._orders.map((order) => Marker(
+                    point: LatLng(
+                      (order['latitude'] as num).toDouble(),
+                      (order['longitude'] as num).toDouble(),
                     ),
-                    MarkerLayer(
-                      markers: _couriers.map((courier) => Marker(
-                        point: LatLng(
-                          (courier['latitude'] as num).toDouble(),
-                          (courier['longitude'] as num).toDouble(),
-                        ),
-                        child: GestureDetector(
-                          onTap: () => setState(() {
-                            _selectedCourier = courier;
-                            _selectedOrder = null;
-                          }),
-                          child: const Icon(Icons.delivery_dining, color: MapUtils.courierColor, size: 40),
-                        ),
-                      )).toList(),
-                    ),
-                  ],
-                ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  right: 8,
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Поиск адреса...',
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                        onChanged: _onSearch,
+                    child: GestureDetector(
+                      onTap: () => setState(() {
+                        _selectedOrder = order;
+                        _selectedCourier = null;
+                      }),
+                      child: Icon(
+                        Icons.room,
+                        color: _orderColor(order['status']),
+                        size: MapUtils.markerSize,
                       ),
-                      _buildSearchResults(),
-                    ],
+                    ),
+                  )),
+                ],
+              ),
+              MarkerLayer(
+                markers: _couriers.map((courier) => Marker(
+                  point: LatLng(
+                    (courier['latitude'] as num).toDouble(),
+                    (courier['longitude'] as num).toDouble(),
                   ),
-                ),
-                Positioned(
-                  right: 16,
-                  bottom: 120,
-                  child: FloatingActionButton.small(
-                    onPressed: () {
-                      if (_orders.isNotEmpty) {
-                        _mapController.move(
-                          LatLng(
-                            (_orders.last['latitude'] as num).toDouble(),
-                            (_orders.last['longitude'] as num).toDouble(),
-                          ),
-                          14,
-                        );
-                      }
-                    },
-                    child: const Icon(Icons.my_location),
+                  child: GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedCourier = courier;
+                      _selectedOrder = null;
+                    }),
+                    child: const Icon(Icons.delivery_dining, color: MapUtils.courierColor, size: 40),
                   ),
+                )).toList(),
+              ),
+            ],
+          ),
+          Positioned(
+            top: 8,
+            left: 8,
+            right: 8,
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Поиск адреса...',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  onChanged: _onSearch,
                 ),
-                Positioned(
-                  left: 8,
-                  right: 8,
-                  bottom: 8,
-                  child: _buildInfoPanel(),
-                ),
+                _buildSearchResults(),
               ],
             ),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 120,
+            child: FloatingActionButton.small(
+              onPressed: () {
+                if (_currentPosition != null) {
+                  _mapController?.move(_currentPosition!, 16);
+                }
+              },
+              child: const Icon(Icons.my_location),
+            ),
+          ),
+          Positioned(
+            left: 8,
+            right: 8,
+            bottom: 8,
+            child: _buildInfoPanel(),
+          ),
+        ],
+      ),
     );
   }
 

@@ -42,5 +42,14 @@ class WebSocketManager:
             except Exception:
                 self.disconnect_courier(courier_id, ws)
 
+    async def broadcast_to_all_couriers(self, event: str, data: dict[str, Any]):
+        msg = json.dumps({"event": event, "data": data})
+        for courier_id in list(self.courier_connections.keys()):
+            for ws in self.courier_connections[courier_id].copy():
+                try:
+                    await ws.send_text(msg)
+                except Exception:
+                    self.disconnect_courier(courier_id, ws)
+
 
 ws_manager = WebSocketManager()

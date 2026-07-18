@@ -65,6 +65,10 @@ class AdminService {
     await _api.delete('/api/admin/orders/$id');
   }
 
+  Future<void> cancelOrder(int id) async {
+    await _api.patch('/api/admin/orders/$id/cancel', {});
+  }
+
   Future<Map<String, dynamic>> getStats() async {
     return await _api.get('/api/admin/orders/stats');
   }

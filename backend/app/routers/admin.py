@@ -33,7 +33,7 @@ async def admin_login(body: AdminLogin, db: AsyncSession = Depends(get_db)):
     if not admin or not verify_password(body.password, admin.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token({"sub": admin.id, "role": "admin"})
-    return Token(access_token=token)
+    return Token(access_token=token, role="admin", user_id=admin.id)
 
 
 @router.post("/couriers", response_model=CourierOut)
@@ -112,6 +112,7 @@ async def create_order(
     await db.commit()
 
     await ws_manager.broadcast_to_admins("order_created", {"id": order.id, "order_number": order.order_number})
+    await ws_manager.broadcast_to_all_couriers("order_created", {"id": order.id, "order_number": order.order_number})
     return order
 
 
@@ -178,6 +179,39 @@ async def get_courier_locations(
             "updated_at": loc.updated_at.isoformat() if loc.updated_at else "",
         })
     return locations
+
+
+@router.patch("/orders/{order_id}/cancel")
+async def cancel_order(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: Admin = Depends(get_current_admin),
+):
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.status = "cancelled"
+
+    history = OrderHistory(order_id=order.id, status="cancelled")
+    db.add(history)
+
+    await db.commit()
+
+    await ws_manager.broadcast_to_admins(
+        "order_cancelled",
+        {"id": order.id, "order_number": order.order_number},
+    )
+    if order.courier_id:
+        await ws_manager.send_to_courier(
+            order.courier_id,
+            "order_cancelled",
+            {"id": order.id, "order_number": order.order_number},
+        )
+
+    return {"status": "cancelled"}
 
 
 @router.delete("/orders/{order_id}")

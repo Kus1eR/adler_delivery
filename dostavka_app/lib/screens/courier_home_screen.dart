@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
 import '../services/courier_service.dart';
+import '../services/foreground_service.dart';
 import 'login_screen.dart';
 import 'order_detail_screen.dart';
 
@@ -21,9 +23,7 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _courierService = CourierService();
-  final _availableKey = GlobalKey<_AvailableTabState>();
-  final _myOrdersKey = GlobalKey<_MyOrdersTabState>();
-  final _statsKey = GlobalKey<_StatsTabState>();
+  int _refreshKey = 0;
 
   @override
   void initState() {
@@ -35,6 +35,43 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
       }
     });
     _startLocationUpdates();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startForegroundService());
+  }
+
+  Future<void> _startForegroundService() async {
+    try {
+      final authService = context.read<AuthService>();
+      print('══════════════════════════════');
+      print('🔑 STARTING foreground service');
+      print('🔑 Token: ${authService.token?.substring(0, authService.token!.length < 10 ? authService.token!.length : 10)}...');
+      print('🔑 Token null: ${authService.token == null}');
+      print('🔑 Role: ${authService.role}');
+      print('🔑 CourierId: ${authService.courierId}');
+      print('══════════════════════════════');
+
+      if (authService.token == null || authService.token!.isEmpty) {
+        print('❌ Token is null/empty, skipping');
+        return;
+      }
+      if (authService.courierId == null) {
+        print('❌ CourierId is null, skipping');
+        return;
+      }
+
+      await ForegroundServiceManager.start(
+        authService.token!,
+        'courier',
+        courierId: authService.courierId,
+      );
+      print('✅ ForegroundServiceManager.start() COMPLETED');
+    } catch (e, stack) {
+      print('❌ ForegroundServiceManager.start() FAILED: $e');
+      print('Stack: $stack');
+    }
+  }
+
+  void _onMyOrderChanged() {
+    setState(() => _refreshKey++);
   }
 
   Future<void> _startLocationUpdates() async {
@@ -71,10 +108,6 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
     super.dispose();
   }
 
-  void _refreshStats() {
-    _statsKey.currentState?._loadStats();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -106,9 +139,9 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _MyOrdersTab(key: _myOrdersKey, courierService: _courierService, onOrderChanged: _refreshStats),
-          _AvailableTab(key: _availableKey, courierService: _courierService),
-          _StatsTab(key: _statsKey, courierService: _courierService),
+          _MyOrdersTab(key: const ValueKey('my'), courierService: _courierService, onOrderChanged: _onMyOrderChanged),
+          _AvailableTab(key: const ValueKey('avail'), courierService: _courierService, refreshSignal: _refreshKey),
+          _StatsTab(key: const ValueKey('stats'), courierService: _courierService),
         ],
       ),
     );
@@ -116,9 +149,10 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
 }
 
 class _AvailableTab extends StatefulWidget {
-  const _AvailableTab({super.key, required this.courierService});
+  const _AvailableTab({super.key, required this.courierService, this.refreshSignal});
 
   final CourierService courierService;
+  final int? refreshSignal;
 
   @override
   State<_AvailableTab> createState() => _AvailableTabState();
@@ -128,24 +162,44 @@ class _AvailableTabState extends State<_AvailableTab> {
   List<Order>? _orders;
   bool _isLoading = true;
   String? _error;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadOrders();
+    _startPolling();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPolling() {
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _loadOrders();
+    });
+  }
+
+  @override
+  void didUpdateWidget(_AvailableTab old) {
+    super.didUpdateWidget(old);
+    if (widget.refreshSignal != old.refreshSignal) {
+      _loadOrders();
+    }
   }
 
   Future<void> _loadOrders() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    if (_isLoading && _orders != null) return;
     try {
       final orders = await widget.courierService.getAvailableOrders();
       if (!mounted) return;
       setState(() {
         _orders = orders;
         _isLoading = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -176,11 +230,11 @@ class _AvailableTabState extends State<_AvailableTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading && _orders == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_error != null) {
+    if (_error != null && _orders == null) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -242,6 +296,7 @@ class _AvailableTabState extends State<_AvailableTab> {
         itemBuilder: (context, index) {
           final order = _orders![index];
           return _OrderCard(
+            key: ValueKey(order.id),
             order: order,
             actionLabel: 'Взять заказ',
             actionColor: Colors.green,
@@ -295,7 +350,7 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
       final orders = await widget.courierService.getMyOrders();
       if (!mounted) return;
       setState(() {
-        _orders = orders;
+        _orders = orders.where((o) => o.status != 'cancelled').toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -414,15 +469,19 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
                 ),
               ),
             ),
-            ...active.map((order) => _OrderCard(
-              order: order,
-              actionLabel: order.status == 'taken' ? 'В пути' : 'Доставил',
-              actionColor: order.status == 'taken' ? Colors.orange : Colors.blue,
-              onAction: () => _updateStatus(
-                order,
-                order.status == 'taken' ? 'in_transit' : 'delivered',
+            ...active.map((order) => AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: _OrderCard(
+                key: ValueKey('${order.id}-${order.status}'),
+                order: order,
+                actionLabel: order.status == 'taken' ? 'В пути' : 'Доставил',
+                actionColor: order.status == 'taken' ? Colors.orange : Colors.blue,
+                onAction: () => _updateStatus(
+                  order,
+                  order.status == 'taken' ? 'in_transit' : 'delivered',
+                ),
+                onTap: () => _openDetail(order),
               ),
-              onTap: () => _openDetail(order),
             )),
             const SizedBox(height: 16),
           ],
@@ -438,6 +497,7 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
               ),
             ),
             ...delivered.map((order) => _OrderCard(
+              key: ValueKey('${order.id}-${order.status}'),
               order: order,
               onTap: () => _openDetail(order),
             )),
@@ -724,6 +784,7 @@ Future<void> _openMap(String address) async {
 
 class _OrderCard extends StatelessWidget {
   const _OrderCard({
+    super.key,
     required this.order,
     this.actionLabel,
     this.actionColor,

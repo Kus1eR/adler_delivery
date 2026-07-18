@@ -1,0 +1,311 @@
+========================================
+  ¦Ô¦Þ¦á¦â¦Ð¦Ò¦Ú¦Ð - Backend + Flutter
+========================================
+
+[1/2] ¦×¦-¦¬TÃTÁ¦¦ ¦-TÍ¦¦¦¦¦-¦+¦-...
+¦Ö¦+TÑ¦- 5 TÁ¦¦¦¦TÃ¦-¦+ ¦¬¦-¦¦¦- ¦-TÍ¦¦¦¦¦-¦+ TÁTÂ¦-TÀTÂTÃ¦¦TÂ...
+[2/2] ¦×¦-¦¬TÃTÁ¦¦ Flutter...
+Resolving dependencies...
+Downloading packages...
+  flutter_local_notifications 18.0.1 (22.0.1 available)
+  flutter_local_notifications_linux 5.0.0 (8.0.1 available)
+  flutter_local_notifications_platform_interface 8.0.0 (12.0.0 available)
+  flutter_map 7.0.2 (8.3.1 available)
+  geolocator 13.0.4 (14.0.3 available)
+  geolocator_android 4.6.2 (5.0.3 available)
+  latlong2 0.9.1 (0.10.1 available)
+  matcher 0.12.19 (0.12.20 available)
+  meta 1.18.0 (1.19.0 available)
+  mgrs_dart 2.0.0 (3.0.0 available)
+  proj4dart 2.1.0 (3.0.0 available)
+  test_api 0.7.11 (0.7.13 available)
+  timezone 0.10.1 (0.11.1 available)
+  unicode 0.3.1 (1.1.9 available)
+  uuid 4.5.3 (4.6.0 available)
+  vector_math 2.2.0 (2.4.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Launching lib\main.dart on Infinix X6831 in debug mode...
+Running Gradle task 'assembleDebug'...                              5,1s
+v Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...           5,8s
+I/FlutterActivityAndFragmentDelegate( 3692): If you are attempting to set --enable-dart-profiling via Intent extras to launch a Flutter component outside of using the Flutter CLI, note that support for setting engine flags on Android via Intent will soon be dropped; see https://github.com/flutter/flutter/issues/180686 for more information on this breaking change. To migrate, set --enable-dart-profiling or any other flags specified via Intent extras on the command line instead or see https://github.com/flutter/flutter/blob/main/docs/engine/Flutter-Android-Engine-Flags.md for alternative methods.
+D/FlutterJNI( 3692): Beginning load of flutter...
+D/FlutterJNI( 3692): flutter (null) was loaded normally!
+I/flutter ( 3692): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(62)] Using the Impeller rendering backend (Vulkan).
+D/FlutterGeolocator( 3692): Attaching Geolocator to activity
+D/FlutterRenderer( 3692): Width is zero. 0,0
+D/FlutterRenderer( 3692): Width is zero. 0,0
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+I/le.dostavka_app( 3692): Compiler allocated 5037KB to compile void android.view.ViewRootImpl.performTraversals()
+Syncing files to device Infinix X6831...                           184ms
+
+Flutter run key commands.
+r Hot reload.
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on Infinix X6831 is available at: http://127.0.0.1:49356/2WsUC4caZc8=/
+The Flutter DevTools debugger and profiler on Infinix X6831 is available at:
+http://127.0.0.1:49356/2WsUC4caZc8=/devtools/?uri=ws://127.0.0.1:49356/2WsUC4caZc8=/ws
+D/FlutterGeolocator( 3692): Creating service.
+D/FlutterGeolocator( 3692): Binding to location service.
+I/Choreographer( 3692): Skipped 68 frames!  The application may be doing too much work on its main thread.
+D/FlutterGeolocator( 3692): Geolocator foreground service connected
+D/FlutterGeolocator( 3692): Initializing Geolocator services
+D/FlutterGeolocator( 3692): Flutter engine connected. Connected engine count 1
+I/flutter ( 3692): ? Foreground channel created
+I/flutter ( 3692): ? Orders channel created
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/CompatibilityChangeReporter( 3692): Compat change id reported: 160794467; UID 10281; state: ENABLED
+I/flutter ( 3692): ? Service configured
+I/flutter ( 3692): ? Foreground service initialized
+V/BackgroundService( 3692): Starting flutter engine for background service
+W/libc    ( 3692): Access denied finding property "persist.vendor.debug.gpud.enable"
+D/BLASTBufferQueue( 3692): [SurfaceView[com.example.dostavka_app/com.example.dostavka_app.MainActivity]#1](f:0,a:1) acquireNextBufferLocked size=1080x2460 mFrameNumber=1 applyTransaction=true mTimestamp=1192117577564593(auto) mPendingTransactions.size=0 graphicBufferId=15857019256842 transform=0
+W/libc    ( 3692): Access denied finding property "vendor.debug.forcibly_enable_mtk_ray_tracing"
+I/flutter ( 3692): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(62)] Using the Impeller rendering backend (Vulkan).
+I/flutter ( 3692): ?? onStart() ENTRY
+V/BackgroundService( 3692): Service already running, using existing service
+I/Choreographer( 3692): Skipped 234 frames!  The application may be doing too much work on its main thread.
+I/mali    ( 3692): [DebugProp] GPU Debug-Mechanism Disable !
+D/BLASTBufferQueue( 3692): [VRI[MainActivity]#0](f:0,a:1) acquireNextBufferLocked size=1080x2460 mFrameNumber=1 applyTransaction=true mTimestamp=1192118493968209(auto) mPendingTransactions.size=0 graphicBufferId=15857019256849 transform=0
+W/Parcel  ( 3692): Expecting binder but got null!
+I/OpenGLRenderer( 3692): Davey! duration=4114ms; Flags=1, FrameTimelineVsyncId=307009065, IntendedVsync=1192114380270253, Vsync=1192118302089661, InputEventId=0, HandleInputStart=1192118310358978, AnimationStart=1192118310363285, PerformTraversalsStart=1192118310507362, DrawStart=1192118311257824, FrameDeadline=1192114400270253, FrameInterval=1192118310264516, FrameStartTime=16759912, SyncQueued=1192118312579362, SyncStart=1192118312731055, IssueDrawCommandsStart=1192118313533439, SwapBuffers=1192118491541132, FrameCompleted=1192118495331055, DequeueBufferDuration=6473538, QueueBufferDuration=1128308, GpuCompleted=1192118495225824, SwapBuffersCompleted=1192118495331055, DisplayPresentTime=0, CommandSubmissionCompleted=1192118491541132,
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterGeolocator( 3692): Geolocator foreground service connected
+D/FlutterGeolocator( 3692): Initializing Geolocator services
+D/FlutterGeolocator( 3692): Flutter engine connected. Connected engine count 2
+I/flutter ( 3692): ? FLN initialized in isolate
+D/ProfileInstaller( 3692): Installing profile for com.example.dostavka_app
+I/flutter ( 3692): ?? Token: true (139 chars), Courier: null
+I/flutter ( 3692): ? onStart() — no token/courier, bailing
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+I/config_debug( 3692): updateDecorCaptionStatus: {1.0 250mcc20mnc [ru_RU] ldltr sw360dp w360dp h784dp 480dpi nrml long port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2460) mAppBounds=Rect(0, 108 - 1080, 2460) mMaxBounds=Rect(0, 0 - 1080, 2460) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mMultiWindowMode=normal mMultiWindowId=-1 mWindowResiable=-1 mInLargeScreen=-1 mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mDisplayUniqueId=0} s.1 fontWeightAdjustment=0} fromMultiWindow: false
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (fy.b@1b2b231) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (io.flutter.plugins.imagepicker.n@a5aa697) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (io.flutter.plugins.pathprovider.i@7252084) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (com.baseflow.permissionhandler.o@4cf406d) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin@615c0f0) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (com.tekartik.sqflite.g0@1ac7669) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (io.flutter.plugins.urllauncher.i@b898ee) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (ge0.d@345d18f) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (ec.b@e2dfc1c) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (lx.d@c57f7ab) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (bc.b@82cbe08) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (com.transsion.flutter_vap.b@f2389a1) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (kx.c@996d7c6) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (com.transsion.trans_flutter_effect_light_plugin.TransFlutterEffectLightPlugin@41c6387) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (io.flutter.plugins.camerax.o@7d3b2b4) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (com.lib.flutter_blue_plus.FlutterBluePlusPlugin@ce1edd) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (gx.g@9534620) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (ex.a@492cbd9) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (com.example.fl_a_analytics.FlAAnalyticsPlugin@f73199e) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (hx.b@4043c7f) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+W/FlutterEngineCxnRegstry(23460): Attempted to register plugin (mea.hetian.flutter_qr_reader.FlutterQrReaderPlugin@976a44c) but it was already registered with this FlutterEngine (io.flutter.embedding.engine.a@e46fd16).
+D/FlutterGeolocator(23460): Creating service.
+D/FlutterGeolocator(23460): Binding to location service.
+D/FlutterGeolocator(23460): Flutter engine connected. Connected engine count 1
+I/flutter (23460): flutter_android_full_module main()
+I/flutter (23460): ScreenUtil DeviceInfo from Android: isRealTablet=false
+I/flutter (23460): ScreenUtil DeviceInfo from Android: result=false
+I/flutter (23460): initLogConfig
+I/flutter (23460): IsolateHelper startIsolate begin
+I/flutter (23460): UploadAthenaData#addConnectListener()
+I/flutter (23460): IsolateHelper,isolateWorker begin
+I/flutter (23460): IsolateHelper,ensureInitialized
+I/flutter (23460): _MyApp initState
+I/flutter (23460): MyApp main build
+I/flutter (23460): language locale 1:ru_RU
+I/flutter (23460): language locale 2:ru_RU
+I/flutter (23460): supportLocales:[en, am_ET, ar, ar_MA, as_IN, az, bg_BG, bn_BD, bs, bs_BA, ckb_IQ, cs_CZ, da_DK, de_DE, efi, el_GR, es, es_US, et_EE, fa_IR, fi_FI, fil_PH, fr, gu_IN, guz_KE, ha_NG, he_IL, hi_IN, hr_HR, hu_HU, ibb, id_ID, ig_NG, is_IS, it_IT, kam_KE, ki_KE, kk_KZ, km_KH, kn_IN, ks, lb_LU, lo_LA, lt_LT, luo_KE, lv_LV, mer_KE, mk_MK, ml, mn, mr_IN, ms_MY, my_MM, my_Qaag_ZG, my_ZG, nb_NO, ne_NP, nl_NL, om_ET, or_IN, pa, pcm_NG, pl_PL, pt_BR, pt_PT, ro_MD, ro_RO, ru, si_LK, sk_SK, sl_SI, so, sq_AL, sr_ME, sr_RS, sv_SE, sw_TZ, ta_IN, te_IN, tg, th_TH, ti_ET, tk, tr_TR, uk_UA, ur_PK, uz, vi_VN, yo_NG, zh, zh_Hant_TW]
+I/flutter (23460): isSupportLanguage:true
+I/flutter (23460): isSupportDateFormat:true
+I/flutter (23460): MyRouteObserver Pushed a new route: /
+I/flutter (23460): MyRouteObserver now: [/]
+I/flutter (23460): didPush:  Instance of 'MaterialPageRoute<dynamic>', null
+I/flutter (23460): didPush: name=/, cid=null, current=null, args=null
+I/flutter (23460): reportEvent: flutter_open, /, null
+I/flutter (23460): screenSize:Instance of 'Size'  orientation:Orientation.portrait
+I/flutter (23460): AndroidMainPage build true
+I/flutter (23460): Instance of 'AndroidMainPageController' is onInit
+I/flutter (23460): locale:en_US
+I/flutter (23460): locale.languageCode:en
+I/flutter (23460): _buildDevicePage false
+I/flutter (23460): DeviceSenderImpl#DeviceSenderImpl, DeviceSenderImpl: 351241967
+I/flutter (23460): DeviceSenderImpl#DeviceSenderImpl, DeviceSenderImpl: 351241967
+I/flutter (23460): check dialog isMainPageVisible: true,null
+I/flutter (23460): DeviceSenderImpl#DeviceSenderImpl, DeviceSenderImpl: 351241967
+I/flutter (23460): DeviceSportDialogManager connectedDevice: null
+I/flutter (23460): measure2 pid: null
+I/flutter (23460): getInSportType config null
+I/flutter (23460): locale:ru_RU
+I/flutter (23460): locale.languageCode:ru
+I/flutter (23460): startIsolate Result :true
+I/flutter (23460): IsolateHelper,INIT, initMessage:MessageInit{logShowLevel: 7, showLog: true, saveLog: true, showTime: true, logFileName: log_xsound_2026-07-18_04_10_50.txt, logFoldPath: /storage/emulated/0/Android/data/com.transsion.healthlife/files/flutter}
+I/flutter (23460): net status: true
+I/flutter (23460): net status change: true
+I/flutter (23460): INFO: 2026-07-18 04:10:50.623131: DeviceManager,BluetoothStateManagerImpl#_init(), state: BluetoothAdapterState.off
+I/flutter (23460): _getLocalFile path:/storage/emulated/0/Android/data/com.transsion.healthlife/files/flutter/log_xsound_2026-07-18_04_10_50.txt
+I/flutter (23460): INFO: 2026-07-18 04:10:50.778426: InternetStatusManager,Internet????: true
+I/flutter (23460): INFO: 2026-07-18 04:10:50.780651: InternetStatusManager,?????????
+W/FinalizerDaemon( 3692): type=1400 audit(0.0:734646): avc: denied { getopt } for path="/dev/socket/usap_pool_primary" scontext=u:r:untrusted_app:s0:c25,c257,c512,c768 tcontext=u:r:zygote:s0 tclass=unix_stream_socket permissive=0 app=com.hoffnung
+D/os.LiceInfo( 3692): instance successfully. com.transsion.message.bank.v1.MessageBankLice@b32a719 from com.transsion.message.bank.IMessageBankLice
+I/flutter (23460): getPid get_pid argument get_pid get pid is null
+I/flutter (23460): ------------------------------------------------------------------------------------------------------------------------
+I/flutter (23460): ¦ 2026-07-18 04:10:58.939
+I/flutter (23460): +???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+I/flutter (23460): ¦ transsion - DeviceWorldClockAndroidImpl device_query_world_clock_list start
+I/flutter (23460): L-----------------------------------------------------------------------------------------------------------------------
+I/flutter (23460): ------------------------------------------------------------------------------------------------------------------------
+I/flutter (23460): ¦ 2026-07-18 04:10:58.956
+I/flutter (23460): +???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+I/flutter (23460): ¦ transsion - DeviceWorldClockAndroidImpl device_query_world_clock_list result: []
+I/flutter (23460): L-----------------------------------------------------------------------------------------------------------------------
+I/flutter (23460): ------------------------------------------------------------------------------------------------------------------------
+I/flutter (23460): ¦ 2026-07-18 04:10:58.957
+I/flutter (23460): +???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+I/flutter (23460): ¦ transsion - DeviceWorldClockAndroidImpl device_query_world_clock_list listMap: []
+I/flutter (23460): L-----------------------------------------------------------------------------------------------------------------------
+I/flutter (23460): ------------------------------------------------------------------------------------------------------------------------
+I/flutter (23460): ¦ 2026-07-18 04:10:58.957
+I/flutter (23460): +???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+I/flutter (23460): ¦ transsion - World Clock sendWorldClockTranslate worldClockList: null
+I/flutter (23460): L-----------------------------------------------------------------------------------------------------------------------
+D/InputMethodManager( 3692): invalidateInput servedInputConnection: RemoteInputConnectionImpl{connection=io.flutter.plugin.editing.InputConnectionAdaptor@41e8889 finished=false mParentInputMethodManager.isActive()=true mServedView=io.flutter.embedding.android.FlutterView{190108e VFE...... .F....ID 0,0-1080,2460 #1 aid=1073741824}} sessionid: 0
+D/InputMethodManager( 3692): showSoftInput() view=io.flutter.embedding.android.FlutterView{190108e VFE...... .F....ID 0,0-1080,2460 #1 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+D/InputConnectionAdaptor( 3692): The input method toggled text monitoring on
+I/AssistStructure( 3692): Flattened final assist data: 392 bytes, containing 1 windows, 3 views
+W/OnBackInvokedCallback( 3692): OnBackInvokedCallback is not enabled for the application.
+W/OnBackInvokedCallback( 3692): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/InputMethodManager( 3692): invalidateInput servedInputConnection: RemoteInputConnectionImpl{connection=io.flutter.plugin.editing.InputConnectionAdaptor@5a48ff2 finished=false mParentInputMethodManager.isActive()=true mServedView=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824}} sessionid: 0
+D/InputMethodManager( 3692): showSoftInput() view=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+D/InputConnectionAdaptor( 3692): The input method toggled text monitoring on
+I/AssistStructure( 3692): Flattened final assist data: 392 bytes, containing 1 windows, 3 views
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/InsetsController( 3692): show(ime(), fromIme=true)
+I/flutter ( 3692): ?? WS CONNECTING: ws://192.168.31.226:8000/ws/admin?token=eyJhbGciOiJIUzI1NiIsInR 5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzg0NDIzNDY5fQ.CgAGpPnS0r_lMTODy3R57GF9AYpg2YhXgtT7o60yLok
+I/flutter ( 3692): ?? WS CONNECTED
+W/OnBackInvokedCallback( 3692): OnBackInvokedCallback is not enabled for the application.
+W/OnBackInvokedCallback( 3692): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/flutter ( 3692): ?? POST_NOTIFICATIONS permission granted: true
+I/flutter ( 3692): ? Service started
+V/BackgroundService( 3692): Service already running, using existing service
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+W/OnBackInvokedCallback( 3692): OnBackInvokedCallback is not enabled for the application.
+W/OnBackInvokedCallback( 3692): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/InputMethodManager( 3692): invalidateInput servedInputConnection: RemoteInputConnectionImpl{connection=io.flutter.plugin.editing.InputConnectionAdaptor@2a22b4a finished=false mParentInputMethodManager.isActive()=true mServedView=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824}} sessionid: 0
+D/InputMethodManager( 3692): showSoftInput() view=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+D/InputConnectionAdaptor( 3692): The input method toggled text monitoring on
+I/AssistStructure( 3692): Flattened final assist data: 392 bytes, containing 1 windows, 3 views
+W/OnBackInvokedCallback( 3692): OnBackInvokedCallback is not enabled for the application.
+W/OnBackInvokedCallback( 3692): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/InputMethodManager( 3692): invalidateInput servedInputConnection: RemoteInputConnectionImpl{connection=io.flutter.plugin.editing.InputConnectionAdaptor@65fb216 finished=false mParentInputMethodManager.isActive()=true mServedView=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824}} sessionid: 0
+D/InputMethodManager( 3692): showSoftInput() view=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+D/InputConnectionAdaptor( 3692): The input method toggled text monitoring on
+I/AssistStructure( 3692): Flattened final assist data: 392 bytes, containing 1 windows, 3 views
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/InputMethodManager( 3692): invalidateInput servedInputConnection: RemoteInputConnectionImpl{connection=io.flutter.plugin.editing.InputConnectionAdaptor@295d84 finished=false mParentInputMethodManager.isActive()=true mServedView=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824}} sessionid: 0
+D/InputMethodManager( 3692): showSoftInput() view=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+D/InputConnectionAdaptor( 3692): The input method toggled text monitoring on
+I/AssistStructure( 3692): Flattened final assist data: 392 bytes, containing 1 windows, 3 views
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/InputMethodManager( 3692): invalidateInput servedInputConnection: RemoteInputConnectionImpl{connection=io.flutter.plugin.editing.InputConnectionAdaptor@cd72925 finished=false mParentInputMethodManager.isActive()=true mServedView=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824}} sessionid: 0
+D/InputMethodManager( 3692): showSoftInput() view=io.flutter.embedding.android.FlutterView{190108e VFE...... .F...... 0,0-1080,2460 #1 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+D/InputConnectionAdaptor( 3692): The input method toggled text monitoring on
+I/AssistStructure( 3692): Flattened final assist data: 392 bytes, containing 1 windows, 3 views
+D/InsetsController( 3692): show(ime(), fromIme=true)
+D/InsetsController( 3692): show(ime(), fromIme=true)
+I/flutter ( 3692): ?? WS MESSAGE: {"event": "order_created", "data": {"id": 30, "order_number": "555 "}}
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/os.SingleLiceFactory( 3692): using com.android.internal.IInternalViewLice$DefaultImpl@962c3e9 instead of com.transsion.activityembedding.ActivityEmbeddingLiceFactory  from com.android.internal.IInternalViewLice
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.
+D/FlutterJNI( 3692): Sending viewport metrics to the engine.

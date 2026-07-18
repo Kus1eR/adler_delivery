@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/courier.dart';
 import '../models/order.dart';
 import '../services/admin_service.dart';
 import '../services/auth_service.dart';
+import '../services/foreground_service.dart';
+import '../services/websocket_service.dart';
 import 'courier_detail_screen.dart';
 import 'login_screen.dart';
 import 'map_screen.dart';
 import 'order_detail_screen.dart';
 
 String formatOrderDate(String isoDate) {
-  final date = DateTime.parse(isoDate);
-  const months = [
-    'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-  ];
-  return '${date.day} ${months[date.month - 1]}, '
-      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  try {
+    final date = DateTime.parse(isoDate);
+    const months = [
+      'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+    ];
+    return '${date.day} ${months[date.month - 1]}, '
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  } catch (_) {
+    return isoDate;
+  }
 }
 
 class AdminHomeScreen extends StatefulWidget {
@@ -28,6 +35,95 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   int _currentIndex = 0;
+  WebSocketService? _wsService;
+  final _ordersRefreshSignal = ValueNotifier<int>(0);
+  final _ordersTabKey = GlobalKey<_OrdersTabState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        _initWebSocket();
+        _startForegroundService();
+        _requestNotificationPermission();
+      } catch (e) {
+        print('❌ AdminHomeScreen init error: $e');
+      }
+    });
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      final plugin = FlutterLocalNotificationsPlugin();
+      final androidPlugin = plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        final granted = await androidPlugin.requestNotificationsPermission();
+        print('📱 POST_NOTIFICATIONS permission granted: $granted');
+      }
+    } catch (e) {
+      print('❌ Notification permission error: $e');
+    }
+  }
+
+  void _startForegroundService() {
+    try {
+      final authService = context.read<AuthService>();
+      if (authService.token != null) {
+        ForegroundServiceManager.start(authService.token!, 'admin');
+      }
+    } catch (e) {
+      print('❌ Foreground service error: $e');
+    }
+  }
+
+  void _initWebSocket() {
+    try {
+      final authService = context.read<AuthService>();
+      if (authService.token != null) {
+        _wsService = WebSocketService(
+          token: authService.token!,
+          role: 'admin',
+        );
+        _wsService!.onMessage = (payload) {
+          if (!mounted) return;
+          final type = payload['type'] as String?;
+          if (type == 'order_taken' || type == 'order_status_changed' || type == 'order_cancelled') {
+            _ordersTabKey.currentState?.handleWsUpdate(payload);
+            return;
+          }
+          _ordersRefreshSignal.value++;
+        };
+        _wsService!.connect();
+      }
+    } catch (e) {
+      print('❌ WebSocket init error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _wsService?.disconnect();
+    _ordersRefreshSignal.dispose();
+    super.dispose();
+  }
+
+  Widget _buildCurrentTab() {
+    switch (_currentIndex) {
+      case 0:
+        return _OrdersTab(key: _ordersTabKey, refreshSignal: _ordersRefreshSignal);
+      case 1:
+        return const _CouriersTab(key: ValueKey('couriers'));
+      case 2:
+        return const _StatsTab(key: ValueKey('stats'));
+      case 3:
+        return const MapScreen();
+      default:
+        return _OrdersTab(key: _ordersTabKey, refreshSignal: _ordersRefreshSignal);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,25 +134,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              await context.read<AuthService>().logout();
-              if (!context.mounted) return;
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
+              try {
+                await context.read<AuthService>().logout();
+                if (!context.mounted) return;
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+              } catch (e) {
+                print('❌ Logout error: $e');
+              }
             },
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: const [
-          _OrdersTab(),
-          _CouriersTab(),
-          _StatsTab(),
-          MapScreen(),
-        ],
-      ),
+      body: _buildCurrentTab(),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
@@ -90,7 +182,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 // ── Tab 1: Orders ──────────────────────────────────────────────────────────────
 
 class _OrdersTab extends StatefulWidget {
-  const _OrdersTab();
+  const _OrdersTab({super.key, required this.refreshSignal});
+
+  final ValueNotifier<int> refreshSignal;
 
   @override
   State<_OrdersTab> createState() => _OrdersTabState();
@@ -114,11 +208,13 @@ class _OrdersTabState extends State<_OrdersTab> {
   @override
   void initState() {
     super.initState();
-    _loadOrders();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadOrders());
+    widget.refreshSignal.addListener(_loadOrders);
   }
 
   @override
   void dispose() {
+    widget.refreshSignal.removeListener(_loadOrders);
     _numberCtrl.dispose();
     _addressCtrl.dispose();
     _priceCtrl.dispose();
@@ -129,12 +225,51 @@ class _OrdersTabState extends State<_OrdersTab> {
     super.dispose();
   }
 
-  Future<void> _loadOrders() async {
+  void handleWsUpdate(Map<String, dynamic> payload) {
+    final type = payload['type'] as String?;
+    final orderId = payload['id'] as int?;
+    if (orderId == null) return;
+
+    final String newStatus;
+    if (type == 'order_taken') {
+      newStatus = 'taken';
+    } else if (type == 'order_status_changed') {
+      final s = payload['status'] as String?;
+      if (s == null) return;
+      newStatus = s;
+    } else if (type == 'order_cancelled') {
+      newStatus = 'cancelled';
+    } else {
+      return;
+    }
+
     setState(() {
-      _isLoading = true;
-      _error = null;
+      final idx = _orders.indexWhere((o) => o.id == orderId);
+      if (idx != -1) {
+        _orders[idx] = Order(
+          id: orderId,
+          orderNumber: _orders[idx].orderNumber,
+          address: _orders[idx].address,
+          price: _orders[idx].price,
+          courierFee: _orders[idx].courierFee,
+          description: _orders[idx].description,
+          recipientPhone: _orders[idx].recipientPhone,
+          adminPhone: _orders[idx].adminPhone,
+          status: newStatus,
+          latitude: _orders[idx].latitude,
+          longitude: _orders[idx].longitude,
+          createdAt: _orders[idx].createdAt,
+        );
+      }
     });
+  }
+
+  Future<void> _loadOrders() async {
     try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
       final orders = await _adminService.getAllOrders(
         status: _activeFilter == 'all' ? null : _activeFilter,
       );
@@ -144,6 +279,7 @@ class _OrdersTabState extends State<_OrdersTab> {
         _isLoading = false;
       });
     } catch (e) {
+      print('❌ _loadOrders error: $e');
       if (!mounted) return;
       setState(() {
         _error = e.toString();
@@ -335,6 +471,43 @@ class _OrdersTabState extends State<_OrdersTab> {
     }
   }
 
+  Future<void> _confirmCancel(Order order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отменить заказ?'),
+        content: Text('Заказ ${order.orderNumber} будет отменён.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Нет'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Да, отменить', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _adminService.cancelOrder(order.id);
+        _loadOrders();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Заказ ${order.orderNumber} отменён')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -424,13 +597,15 @@ class _OrdersTabState extends State<_OrdersTab> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadOrders,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _orders.length,
-        itemBuilder: (context, index) {
-          final order = _orders[index];
+      final filteredOrders = _orders.where((o) => o.status != 'cancelled').toList();
+
+      return RefreshIndicator(
+        onRefresh: _loadOrders,
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: filteredOrders.length,
+          itemBuilder: (context, index) {
+            final order = filteredOrders[index];
           final canDelete = order.status == 'available';
 
           return Dismissible(
@@ -452,42 +627,82 @@ class _OrdersTabState extends State<_OrdersTab> {
             },
             child: Card(
               margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                title: Text(order.orderNumber, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(order.address, maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${order.price.toStringAsFixed(0)} ₽',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor(order.status).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        order.statusLabel,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: statusColor(order.status),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => OrderDetailScreen(order: order),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(order.orderNumber, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text(order.address, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${order.price.toStringAsFixed(0)} ₽',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: statusColor(order.status).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              order.statusLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: statusColor(order.status),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (order.status == 'available' || order.status == 'taken') ...[
+                            const SizedBox(height: 2),
+                            SizedBox(
+                              height: 22,
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  foregroundColor: Colors.red,
+                                ),
+                                onPressed: () => _confirmCancel(order),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.cancel, size: 12),
+                                    SizedBox(width: 2),
+                                    Text('Отменить', style: TextStyle(fontSize: 9)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -502,7 +717,7 @@ class _OrdersTabState extends State<_OrdersTab> {
 // ── Tab 2: Couriers ────────────────────────────────────────────────────────────
 
 class _CouriersTab extends StatefulWidget {
-  const _CouriersTab();
+  const _CouriersTab({super.key});
 
   @override
   State<_CouriersTab> createState() => _CouriersTabState();
@@ -513,6 +728,7 @@ class _CouriersTabState extends State<_CouriersTab> {
   List<Courier> _couriers = [];
   bool _isLoading = true;
   String? _error;
+  bool _initialized = false;
 
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -520,7 +736,10 @@ class _CouriersTabState extends State<_CouriersTab> {
   @override
   void initState() {
     super.initState();
-    _loadCouriers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialized = true;
+      _loadCouriers();
+    });
   }
 
   @override
@@ -531,11 +750,11 @@ class _CouriersTabState extends State<_CouriersTab> {
   }
 
   Future<void> _loadCouriers() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
     try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
       final couriers = await _adminService.getCouriers();
       if (!mounted) return;
       setState(() {
@@ -543,6 +762,7 @@ class _CouriersTabState extends State<_CouriersTab> {
         _isLoading = false;
       });
     } catch (e) {
+      print('❌ _loadCouriers error: $e');
       if (!mounted) return;
       setState(() {
         _error = e.toString();
@@ -756,18 +976,22 @@ class _CouriersTabState extends State<_CouriersTab> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: const Size(0, 28),
-                      foregroundColor: courier.isActive ? Colors.red.shade700 : Colors.green.shade700,
-                      backgroundColor: courier.isActive ? Colors.red.shade50 : Colors.green.shade50,
-                    ),
-                    onPressed: () => _toggleBlock(courier),
-                    child: Text(
-                      courier.isActive ? 'Блок.' : 'Разблок.',
-                      style: const TextStyle(fontSize: 11),
+                  const SizedBox(height: 2),
+                  SizedBox(
+                    height: 24,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: courier.isActive ? Colors.red.shade700 : Colors.green.shade700,
+                        backgroundColor: courier.isActive ? Colors.red.shade50 : Colors.green.shade50,
+                      ),
+                      onPressed: () => _toggleBlock(courier),
+                      child: Text(
+                        courier.isActive ? 'Блок.' : 'Разблок.',
+                        style: const TextStyle(fontSize: 10),
+                      ),
                     ),
                   ),
                 ],
@@ -783,7 +1007,7 @@ class _CouriersTabState extends State<_CouriersTab> {
 // ── Tab 3: Stats ───────────────────────────────────────────────────────────────
 
 class _StatsTab extends StatefulWidget {
-  const _StatsTab();
+  const _StatsTab({super.key});
 
   @override
   State<_StatsTab> createState() => _StatsTabState();
@@ -798,15 +1022,15 @@ class _StatsTabState extends State<_StatsTab> {
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadStats());
   }
 
   Future<void> _loadStats() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
     try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
       final stats = await _adminService.getStats();
       if (!mounted) return;
       setState(() {
@@ -814,6 +1038,7 @@ class _StatsTabState extends State<_StatsTab> {
         _isLoading = false;
       });
     } catch (e) {
+      print('❌ _loadStats error: $e');
       if (!mounted) return;
       setState(() {
         _error = e.toString();

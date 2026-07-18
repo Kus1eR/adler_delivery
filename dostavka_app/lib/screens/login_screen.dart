@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
-import 'admin_home_screen.dart';
-import 'courier_home_screen.dart';
 import 'server_settings_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -38,11 +36,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await auth.loginAdmin(username, password);
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdminHomeScreen()),
-      );
     } catch (e) {
       _showError(e.toString());
     }
@@ -57,17 +50,18 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    print('═══════════════════════════════════');
+    print('📱 LOGIN: Calling auth.loginCourier("$phone")');
+    print('═══════════════════════════════════');
+
     try {
       await auth.loginCourier(phone);
-      if (!mounted) return;
-      final courierId = auth.courierId;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CourierHomeScreen(courierId: courierId),
-        ),
-      );
+      print('📱 LOGIN: auth.loginCourier completed');
+      print('📱 LOGIN: token=${auth.token?.substring(0, auth.token!.length < 10 ? auth.token!.length : 10)}...');
+      print('📱 LOGIN: role=${auth.role}');
+      print('📱 LOGIN: courierId=${auth.courierId}');
     } catch (e) {
+      print('📱 LOGIN FAILED: $e');
       _showError(e.toString());
     }
   }
