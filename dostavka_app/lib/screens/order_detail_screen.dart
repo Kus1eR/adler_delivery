@@ -141,6 +141,8 @@ class OrderDetailScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final canAct = order.status != 'delivered';
     final actionLabel = _actionLabel(order.status);
+    final auth = context.watch<AuthService>();
+    final isCourier = auth.role == 'courier';
 
     return Scaffold(
       appBar: AppBar(
@@ -216,7 +218,7 @@ class OrderDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _infoRow(theme, Icons.access_time, 'Создан', formatOrderDate(order.createdAt)),
             const SizedBox(height: 32),
-            if (canAct)
+            if (canAct && isCourier)
               SizedBox(
                 width: double.infinity,
                 height: 52,
