@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models import Admin, Courier
+from app.utils import utc_now
 
 bearer_scheme = HTTPBearer()
 
@@ -19,14 +20,17 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except ValueError:
+        return False
 
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     if "sub" in to_encode:
         to_encode["sub"] = str(to_encode["sub"])
-    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = utc_now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
@@ -38,16 +42,33 @@ async def get_current_admin(
     token = credentials.credentials
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        admin_id: int = int(payload.get("sub"))
+        if payload.get("role") != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        admin_id = int(payload.get("sub"))
         if admin_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    except JWTError:
+    except (JWTError, TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     result = await db.execute(select(Admin).where(Admin.id == admin_id))
     admin = result.scalar_one_or_none()
     if admin is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    if not admin.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin inactive"
+        )
+    return admin
+
+
+async def get_current_superadmin(
+    admin: Admin = Depends(get_current_admin),
+) -> Admin:
+    if not admin.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin required",
+        )
     return admin
 
 
@@ -58,10 +79,12 @@ async def get_current_courier(
     token = credentials.credentials
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        courier_id: int = payload.get("sub")
+        if payload.get("role") != "courier":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+        courier_id = int(payload.get("sub"))
         if courier_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    except JWTError:
+    except (JWTError, TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     result = await db.execute(select(Courier).where(Courier.id == courier_id))

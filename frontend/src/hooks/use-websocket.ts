@@ -1,10 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { wsUrl } from '../lib/axios'
+import { useAuthStore } from '../stores/auth.store'
 
 type WsEvent =
   | 'order_created'
+  | 'order_updated'
   | 'order_taken'
   | 'order_status_changed'
   | 'order_cancelled'
@@ -13,6 +14,7 @@ type WsEvent =
 
 const eventMessages: Record<string, string> = {
   order_created: 'Новый заказ создан',
+  order_updated: 'Заказ обновлён',
   order_taken: 'Заказ взят курьером',
   order_status_changed: 'Статус заказа изменён',
   order_cancelled: 'Заказ отменён',
@@ -25,12 +27,18 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const attemptRef = useRef(0)
+  const activeRef = useRef(false)
 
   const connect = useCallback(() => {
-    const url = wsUrl()
-    if (!url.includes('token=')) return
+    if (!activeRef.current) return
+    const token = useAuthStore.getState().token
+    if (!token) return
 
-    const ws = new WebSocket(url)
+    const base = import.meta.env.VITE_API_BASE_URL || ''
+    const wsBase = base.replace(/^http/, 'ws')
+    const url = `${wsBase}/ws/admin`
+
+    const ws = new WebSocket(url, [token])
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -39,15 +47,18 @@ export function useWebSocket() {
 
     ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data) as { event: WsEvent; data: Record<string, unknown> }
-        const message = eventMessages[msg.event] || msg.event
+        if (typeof event.data !== 'string') return
+        const msg = JSON.parse(event.data) as { event?: unknown; data?: unknown }
+        if (typeof msg.event !== 'string' || !(msg.event in eventMessages)) return
+        const eventName = msg.event as WsEvent
+        const message = eventMessages[eventName]
 
         // Invalidate relevant queries
-        if (msg.event.startsWith('order_')) {
+        if (eventName.startsWith('order_')) {
           queryClient.invalidateQueries({ queryKey: ['orders'] })
           queryClient.invalidateQueries({ queryKey: ['stats'] })
         }
-        if (msg.event.startsWith('courier_')) {
+        if (eventName.startsWith('courier_')) {
           queryClient.invalidateQueries({ queryKey: ['couriers'] })
           queryClient.invalidateQueries({ queryKey: ['stats'] })
         }
@@ -60,6 +71,7 @@ export function useWebSocket() {
 
     ws.onclose = () => {
       wsRef.current = null
+      if (!activeRef.current) return
       const delay = Math.min(1000 * 2 ** attemptRef.current, 30000)
       attemptRef.current++
       reconnectTimerRef.current = setTimeout(connect, delay)
@@ -71,8 +83,10 @@ export function useWebSocket() {
   }, [queryClient])
 
   useEffect(() => {
+    activeRef.current = true
     connect()
     return () => {
+      activeRef.current = false
       if (wsRef.current) {
         wsRef.current.close()
       }

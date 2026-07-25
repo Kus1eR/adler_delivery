@@ -1,8 +1,7 @@
-import { useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
-import { useQuery } from '@tanstack/react-query'
-import { locationsApi } from '../../api/locations'
 import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import type { MapRendererProps } from './map-types'
 
 // Fix default marker icon for Leaflet + bundlers
 // @ts-expect-error - Leaflet icon issue with bundlers
@@ -13,30 +12,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 })
 
-const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173] // Moscow
+const orderIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:28px;height:28px;border-radius:8px;background:#2563eb;color:white;display:grid;place-items:center;font-weight:700;border:2px solid white;box-shadow:0 2px 8px #0005">З</div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+})
 
-export function CourierMap() {
-  const { data: locations = [], isLoading } = useQuery({
-    queryKey: ['locations'],
-    queryFn: locationsApi.get,
-    refetchInterval: 15000,
-  })
-
-  const center = useMemo(() => {
-    if (locations.length > 0) {
-      return [locations[0].latitude, locations[0].longitude] as [number, number]
-    }
-    return DEFAULT_CENTER
-  }, [locations])
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[600px] bg-zinc-100 dark:bg-zinc-800 rounded-xl">
-        <p className="text-zinc-500">Загрузка карты...</p>
-      </div>
-    )
-  }
-
+export default function CourierMap({ locations, orders, center }: MapRendererProps) {
   return (
     <div className="h-[600px] rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
       <MapContainer
@@ -58,6 +41,23 @@ export function CourierMap() {
                 <span className="text-zinc-500">
                   Обновлено: {new Date(loc.updated_at).toLocaleString('ru-RU')}
                 </span>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+        {orders.map((order) => (
+          <Marker
+            key={`order-${order.id}`}
+            position={[order.latitude, order.longitude]}
+            icon={orderIcon}
+          >
+            <Popup>
+              <div className="text-sm">
+                <strong>Заказ {order.order_number}</strong>
+                <br />
+                <span>{order.address}</span>
+                <br />
+                <span className="text-zinc-500">Статус: {order.status}</span>
               </div>
             </Popup>
           </Marker>

@@ -12,24 +12,35 @@ from app.models import Admin, Courier, Order, OrderHistory
 async def seed():
     async with async_session() as db:
         existing = await db.execute(select(Admin).where(Admin.username == "admin"))
-        if existing.scalar_one_or_none():
+        existing_admin = existing.scalar_one_or_none()
+        if existing_admin:
+            existing_admin.is_active = True
+            existing_admin.is_superadmin = True
+            await db.commit()
             print("Database already seeded, skipping.")
             return
 
         admin = Admin(
             username="admin",
             hashed_password=hash_password("admin123"),
+            display_name="Главный администратор",
+            is_active=True,
+            is_superadmin=True,
         )
         db.add(admin)
 
         couriers_data = [
-            ("Алексей Смирнов", "+79001111111"),
-            ("Мария Петрова", "+79002222222"),
-            ("Дмитрий Иванов", "+79003333333"),
+            ("Алексей Смирнов", "+79001111111", "courier123"),
+            ("Мария Петрова", "+79002222222", "courier123"),
+            ("Дмитрий Иванов", "+79003333333", "courier123"),
         ]
         couriers = []
-        for name, phone in couriers_data:
-            courier = Courier(name=name, phone=phone)
+        for name, phone, password in couriers_data:
+            courier = Courier(
+                name=name,
+                phone=phone,
+                hashed_password=hash_password(password),
+            )
             db.add(courier)
             couriers.append(courier)
         await db.commit()
@@ -95,7 +106,7 @@ async def seed():
 
     print("Database seeded successfully!")
     print("  Admin: admin / admin123")
-    print("  Couriers: +79001111111, +79002222222, +79003333333")
+    print("  Couriers: +79001111111 / courier123, +79002222222 / courier123, +79003333333 / courier123")
     print("  Orders: 8 (4 available, 2 taken, 2 delivered)")
 
 

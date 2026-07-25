@@ -4,15 +4,16 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '../ui/table'
 import { Button } from '../ui/button'
-import { Ban, Trash2 } from 'lucide-react'
+import { Ban, Pencil, Trash2 } from 'lucide-react'
 
 interface OrdersTableProps {
   orders: Order[]
+  onEditClick: (order: Order) => void
   onCancelClick: (order: Order) => void
   onDeleteClick: (order: Order) => void
 }
 
-export function OrdersTable({ orders, onCancelClick, onDeleteClick }: OrdersTableProps) {
+export function OrdersTable({ orders, onEditClick, onCancelClick, onDeleteClick }: OrdersTableProps) {
   if (orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
@@ -45,13 +46,24 @@ export function OrdersTable({ orders, onCancelClick, onDeleteClick }: OrdersTabl
               <TableCell>{order.price.toLocaleString()} ₽</TableCell>
               <TableCell>{order.courier_fee.toLocaleString()} ₽</TableCell>
               <TableCell>
-                <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold ${s.color}`}>
+                <span
+                  className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold ${s.color}`}
+                  title={order.status === 'cancelled' && order.cancel_reason ? order.cancel_reason : undefined}
+                >
                   {s.label}
                 </span>
               </TableCell>
               <TableCell>{order.recipient_phone}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => onEditClick(order)}
+                    title="Редактировать"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   {order.status !== 'cancelled' && order.status !== 'delivered' && (
                     <Button
                       variant="outline"

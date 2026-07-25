@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
 import '../services/courier_service.dart';
 import '../services/foreground_service.dart';
+import '../services/offline_queue.dart';
 import 'login_screen.dart';
 import 'order_detail_screen.dart';
 
@@ -20,41 +24,98 @@ class CourierHomeScreen extends StatefulWidget {
 }
 
 class _CourierHomeScreenState extends State<CourierHomeScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
-  final _courierService = CourierService();
+  late final CourierService _courierService;
   int _refreshKey = 0;
+  final _myOrdersKey = GlobalKey<_MyOrdersTabState>();
+  final _availableOrdersKey = GlobalKey<_AvailableTabState>();
+  StreamSubscription<Map<String, dynamic>?>? _serviceStateSubscription;
+  StreamSubscription<Map<String, dynamic>?>? _serviceEventSubscription;
+  bool _wsConnected = false;
+  int _pendingCount = 0;
+  int? _highlightedOrderId;
 
   @override
   void initState() {
     super.initState();
+    _courierService = CourierService(courierId: widget.courierId!);
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() {});
       }
     });
-    _startLocationUpdates();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startForegroundService());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _startForegroundService(),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _consumePendingOrder());
+    _serviceStateSubscription = FlutterBackgroundService()
+        .on('courier_state')
+        .listen((state) {
+          if (!mounted || state == null) return;
+          setState(() {
+            _wsConnected = state['ws_connected'] == true;
+            _pendingCount = state['pending_count'] as int? ?? 0;
+          });
+        });
+    _serviceEventSubscription = FlutterBackgroundService()
+        .on('courier_event')
+        .listen((event) {
+          if (!mounted || event == null) return;
+          final orderId = event['order_id'] as int?;
+          if (orderId != null) setState(() => _highlightedOrderId = orderId);
+          _myOrdersKey.currentState?._loadOrders();
+          _availableOrdersKey.currentState?._loadOrders();
+        });
+  }
+
+  Future<void> _flushQueue() async {
+    FlutterBackgroundService().invoke('flush_queue');
+    final pending = await OfflineQueue.count(widget.courierId!);
+    if (mounted) setState(() => _pendingCount = pending);
+  }
+
+  Future<void> _consumePendingOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final orderId = prefs.getInt('pending_order_id');
+    if (orderId == null) return;
+    await prefs.remove('pending_order_id');
+    await Future.wait([
+      _myOrdersKey.currentState?._loadOrders() ?? Future<void>.value(),
+      _availableOrdersKey.currentState?._loadOrders() ?? Future<void>.value(),
+    ]);
+    if (!mounted) return;
+    final inMyOrders =
+        _myOrdersKey.currentState?.containsOrder(orderId) ?? false;
+    final available =
+        _availableOrdersKey.currentState?.containsOrder(orderId) ?? false;
+    setState(() => _highlightedOrderId = orderId);
+    if (inMyOrders) {
+      _tabController.animateTo(0);
+    } else if (available) {
+      _tabController.animateTo(1);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _flushQueue();
+      _consumePendingOrder();
+      _myOrdersKey.currentState?._loadOrders();
+      _availableOrdersKey.currentState?._loadOrders();
+    }
   }
 
   Future<void> _startForegroundService() async {
     try {
       final authService = context.read<AuthService>();
-      print('══════════════════════════════');
-      print('🔑 STARTING foreground service');
-      print('🔑 Token: ${authService.token?.substring(0, authService.token!.length < 10 ? authService.token!.length : 10)}...');
-      print('🔑 Token null: ${authService.token == null}');
-      print('🔑 Role: ${authService.role}');
-      print('🔑 CourierId: ${authService.courierId}');
-      print('══════════════════════════════');
-
       if (authService.token == null || authService.token!.isEmpty) {
-        print('❌ Token is null/empty, skipping');
         return;
       }
       if (authService.courierId == null) {
-        print('❌ CourierId is null, skipping');
         return;
       }
 
@@ -63,10 +124,8 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
         'courier',
         courierId: authService.courierId,
       );
-      print('✅ ForegroundServiceManager.start() COMPLETED');
-    } catch (e, stack) {
-      print('❌ ForegroundServiceManager.start() FAILED: $e');
-      print('Stack: $stack');
+    } catch (e) {
+      debugPrint('Foreground service start failed: $e');
     }
   }
 
@@ -74,36 +133,11 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
     setState(() => _refreshKey++);
   }
 
-  Future<void> _startLocationUpdates() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
-    if (permission == LocationPermission.deniedForever) return;
-
-    Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 50,
-      ),
-    ).listen((Position position) async {
-      final authService = context.read<AuthService>();
-      if (authService.token != null) {
-        await _courierService.updateLocation(
-          position.latitude,
-          position.longitude,
-          authService.token!,
-        );
-      }
-    });
-  }
-
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _serviceStateSubscription?.cancel();
+    _serviceEventSubscription?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -114,6 +148,23 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
       appBar: AppBar(
         title: const Text('Курьер'),
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Center(
+              child: Chip(
+                avatar: Icon(
+                  _wsConnected ? Icons.cloud_done : Icons.cloud_off,
+                  size: 16,
+                ),
+                label: Text(
+                  _pendingCount == 0
+                      ? (_wsConnected ? 'Онлайн' : 'Офлайн')
+                      : 'Офлайн · $_pendingCount',
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -139,9 +190,22 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _MyOrdersTab(key: const ValueKey('my'), courierService: _courierService, onOrderChanged: _onMyOrderChanged),
-          _AvailableTab(key: const ValueKey('avail'), courierService: _courierService, refreshSignal: _refreshKey),
-          _StatsTab(key: const ValueKey('stats'), courierService: _courierService),
+          _MyOrdersTab(
+            key: _myOrdersKey,
+            courierService: _courierService,
+            onOrderChanged: _onMyOrderChanged,
+            highlightedOrderId: _highlightedOrderId,
+          ),
+          _AvailableTab(
+            key: _availableOrdersKey,
+            courierService: _courierService,
+            refreshSignal: _refreshKey,
+            highlightedOrderId: _highlightedOrderId,
+          ),
+          _StatsTab(
+            key: const ValueKey('stats'),
+            courierService: _courierService,
+          ),
         ],
       ),
     );
@@ -149,10 +213,16 @@ class _CourierHomeScreenState extends State<CourierHomeScreen>
 }
 
 class _AvailableTab extends StatefulWidget {
-  const _AvailableTab({super.key, required this.courierService, this.refreshSignal});
+  const _AvailableTab({
+    super.key,
+    required this.courierService,
+    this.refreshSignal,
+    this.highlightedOrderId,
+  });
 
   final CourierService courierService;
   final int? refreshSignal;
+  final int? highlightedOrderId;
 
   @override
   State<_AvailableTab> createState() => _AvailableTabState();
@@ -162,26 +232,15 @@ class _AvailableTabState extends State<_AvailableTab> {
   List<Order>? _orders;
   bool _isLoading = true;
   String? _error;
-  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadOrders();
-    _startPolling();
   }
 
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _loadOrders();
-    });
-  }
+  bool containsOrder(int orderId) =>
+      _orders?.any((order) => order.id == orderId) ?? false;
 
   @override
   void didUpdateWidget(_AvailableTab old) {
@@ -217,13 +276,24 @@ class _AvailableTabState extends State<_AvailableTab> {
       setState(() {
         _orders?.removeWhere((o) => o.id == order.id);
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заказ взят')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Заказ взят')));
     } catch (e) {
       if (!mounted) return;
+      final offline =
+          e is SocketException ||
+          e is http.ClientException ||
+          e is TimeoutException;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red.shade700),
+        SnackBar(
+          content: Text(
+            offline
+                ? 'Нет сети. Заказ не взят и не добавлен в очередь.'
+                : 'Ошибка: $e',
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
       );
     }
   }
@@ -241,7 +311,10 @@ class _AvailableTabState extends State<_AvailableTab> {
           children: [
             Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
             const SizedBox(height: 16),
-            Text('Ошибка загрузки', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Ошибка загрузки',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(_error!, style: TextStyle(color: Colors.grey.shade600)),
             const SizedBox(height: 16),
@@ -302,6 +375,7 @@ class _AvailableTabState extends State<_AvailableTab> {
             actionColor: Colors.green,
             onAction: () => _takeOrder(order),
             onTap: () => _openDetail(order),
+            highlighted: widget.highlightedOrderId == order.id,
           );
         },
       ),
@@ -311,9 +385,7 @@ class _AvailableTabState extends State<_AvailableTab> {
   void _openDetail(Order order) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => OrderDetailScreen(order: order),
-      ),
+      MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
     ).then((changed) {
       if (changed == true) _loadOrders();
     });
@@ -321,10 +393,16 @@ class _AvailableTabState extends State<_AvailableTab> {
 }
 
 class _MyOrdersTab extends StatefulWidget {
-  const _MyOrdersTab({super.key, required this.courierService, this.onOrderChanged});
+  const _MyOrdersTab({
+    super.key,
+    required this.courierService,
+    this.onOrderChanged,
+    this.highlightedOrderId,
+  });
 
   final CourierService courierService;
   final VoidCallback? onOrderChanged;
+  final int? highlightedOrderId;
 
   @override
   State<_MyOrdersTab> createState() => _MyOrdersTabState();
@@ -340,6 +418,9 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
     super.initState();
     _loadOrders();
   }
+
+  bool containsOrder(int orderId) =>
+      _orders?.any((order) => order.id == orderId) ?? false;
 
   Future<void> _loadOrders() async {
     setState(() {
@@ -364,7 +445,10 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
 
   Future<void> _updateStatus(Order order, String newStatus) async {
     try {
-      await widget.courierService.updateOrderStatus(order.id, newStatus);
+      final queued = await widget.courierService.updateOrderStatus(
+        order.id,
+        newStatus,
+      );
       if (!mounted) return;
       setState(() {
         final idx = _orders?.indexWhere((o) => o.id == order.id);
@@ -376,6 +460,9 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
             price: order.price,
             courierFee: order.courierFee,
             description: order.description,
+            cancelReason: order.cancelReason,
+            recipientPhone: order.recipientPhone,
+            adminPhone: order.adminPhone,
             status: newStatus,
             latitude: order.latitude,
             longitude: order.longitude,
@@ -384,13 +471,22 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Статус обновлён')),
+        SnackBar(
+          content: Text(
+            queued
+                ? 'Нет сети. Изменение сохранено и будет отправлено позже.'
+                : 'Статус обновлён',
+          ),
+        ),
       );
       widget.onOrderChanged?.call();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red.shade700),
+        SnackBar(
+          content: Text('Ошибка: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
       );
     }
   }
@@ -408,7 +504,10 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
           children: [
             Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
             const SizedBox(height: 16),
-            Text('Ошибка загрузки', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Ошибка загрузки',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(_error!, style: TextStyle(color: Colors.grey.shade600)),
             const SizedBox(height: 16),
@@ -423,7 +522,8 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
     }
 
     final active = _orders?.where((o) => o.isActive).toList() ?? [];
-    final delivered = _orders?.where((o) => o.status == 'delivered').toList() ?? [];
+    final delivered =
+        _orders?.where((o) => o.status == 'delivered').toList() ?? [];
 
     if (_orders == null || _orders!.isEmpty) {
       return RefreshIndicator(
@@ -436,7 +536,11 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.local_shipping, size: 64, color: Colors.grey.shade400),
+                    Icon(
+                      Icons.local_shipping,
+                      size: 64,
+                      color: Colors.grey.shade400,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       'Нет заказов',
@@ -469,20 +573,25 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
                 ),
               ),
             ),
-            ...active.map((order) => AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: _OrderCard(
-                key: ValueKey('${order.id}-${order.status}'),
-                order: order,
-                actionLabel: order.status == 'taken' ? 'В пути' : 'Доставил',
-                actionColor: order.status == 'taken' ? Colors.orange : Colors.blue,
-                onAction: () => _updateStatus(
-                  order,
-                  order.status == 'taken' ? 'in_transit' : 'delivered',
+            ...active.map(
+              (order) => AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: _OrderCard(
+                  key: ValueKey('${order.id}-${order.status}'),
+                  order: order,
+                  actionLabel: order.status == 'taken' ? 'В пути' : 'Доставил',
+                  actionColor: order.status == 'taken'
+                      ? Colors.orange
+                      : Colors.blue,
+                  onAction: () => _updateStatus(
+                    order,
+                    order.status == 'taken' ? 'in_transit' : 'delivered',
+                  ),
+                  onTap: () => _openDetail(order),
+                  highlighted: widget.highlightedOrderId == order.id,
                 ),
-                onTap: () => _openDetail(order),
               ),
-            )),
+            ),
             const SizedBox(height: 16),
           ],
           if (delivered.isNotEmpty) ...[
@@ -496,11 +605,14 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
                 ),
               ),
             ),
-            ...delivered.map((order) => _OrderCard(
-              key: ValueKey('${order.id}-${order.status}'),
-              order: order,
-              onTap: () => _openDetail(order),
-            )),
+            ...delivered.map(
+              (order) => _OrderCard(
+                key: ValueKey('${order.id}-${order.status}'),
+                order: order,
+                onTap: () => _openDetail(order),
+                highlighted: widget.highlightedOrderId == order.id,
+              ),
+            ),
           ],
         ],
       ),
@@ -510,9 +622,7 @@ class _MyOrdersTabState extends State<_MyOrdersTab> {
   void _openDetail(Order order) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => OrderDetailScreen(order: order),
-      ),
+      MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order)),
     ).then((changed) {
       if (changed == true) _loadOrders();
     });
@@ -568,7 +678,9 @@ class _StatsTabState extends State<_StatsTab> {
       final orders = await widget.courierService.getMyOrders();
       if (!mounted) return;
       setState(() {
-        _deliveredOrders = orders.where((o) => o.status == 'delivered').toList();
+        _deliveredOrders = orders
+            .where((o) => o.status == 'delivered')
+            .toList();
         _isLoadingHistory = false;
       });
       if (!mounted) return;
@@ -577,7 +689,10 @@ class _StatsTabState extends State<_StatsTab> {
       if (!mounted) return;
       setState(() => _isLoadingHistory = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red.shade700),
+        SnackBar(
+          content: Text('Ошибка: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
       );
     }
   }
@@ -649,7 +764,10 @@ class _StatsTabState extends State<_StatsTab> {
           children: [
             Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
             const SizedBox(height: 16),
-            Text('Ошибка загрузки', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Ошибка загрузки',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(_error!, style: TextStyle(color: Colors.grey.shade600)),
             const SizedBox(height: 16),
@@ -707,7 +825,8 @@ class _StatsTabState extends State<_StatsTab> {
               onPressed: _isLoadingHistory ? null : _showHistory,
               icon: _isLoadingHistory
                   ? const SizedBox(
-                      width: 20, height: 20,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.history),
@@ -790,6 +909,7 @@ class _OrderCard extends StatelessWidget {
     this.actionColor,
     this.onAction,
     required this.onTap,
+    this.highlighted = false,
   });
 
   final Order order;
@@ -797,6 +917,7 @@ class _OrderCard extends StatelessWidget {
   final Color? actionColor;
   final VoidCallback? onAction;
   final VoidCallback onTap;
+  final bool highlighted;
 
   Color _statusColor(String status) {
     switch (status) {
@@ -819,6 +940,9 @@ class _OrderCard extends StatelessWidget {
     final statusColor = _statusColor(order.status);
 
     return Card(
+      color: highlighted
+          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.65)
+          : null,
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -839,7 +963,10 @@ class _OrderCard extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
@@ -861,7 +988,11 @@ class _OrderCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
                 child: Row(
                   children: [
-                    Icon(Icons.location_on, size: 16, color: Colors.blue.shade500),
+                    Icon(
+                      Icons.location_on,
+                      size: 16,
+                      color: Colors.blue.shade500,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -880,7 +1011,11 @@ class _OrderCard extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Icon(Icons.attach_money, size: 16, color: Colors.grey.shade500),
+                  Icon(
+                    Icons.attach_money,
+                    size: 16,
+                    color: Colors.grey.shade500,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     'Сумма заказа: ${order.price.toStringAsFixed(0)} ₽',

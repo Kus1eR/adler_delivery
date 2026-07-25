@@ -53,12 +53,12 @@ export default function LoginPage() {
         >
           <div>
             <Label htmlFor="username">Логин</Label>
-            <Input id="username" {...register('username')} placeholder="admin" autoFocus />
+            <Input id="username" {...register('username')} placeholder="admin" autoComplete="username" autoFocus />
             {errors.username && <p className="text-sm text-red-500 mt-1">{errors.username.message}</p>}
           </div>
           <div>
             <Label htmlFor="password">Пароль</Label>
-            <Input id="password" type="password" {...register('password')} />
+            <Input id="password" type="password" {...register('password')} autoComplete="current-password" />
             {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>}
           </div>
           <Button

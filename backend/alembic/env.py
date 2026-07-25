@@ -1,3 +1,4 @@
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -10,6 +11,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.models import Base
 
 config = context.config
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    config.set_main_option(
+        "sqlalchemy.url",
+        database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg"),
+    )
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

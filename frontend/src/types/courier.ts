@@ -11,6 +11,7 @@ export interface Courier {
 export interface CourierCreate {
   name: string
   phone: string
+  password: string
 }
 
 export const courierStatusConfig: Record<CourierStatus, { label: string; color: string }> = {

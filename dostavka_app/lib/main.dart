@@ -12,9 +12,8 @@ void main() async {
   await ApiService.loadSavedUrl();
   try {
     await ForegroundServiceManager.initialize();
-    print('✅ Foreground service initialized');
   } catch (e) {
-    print('❌ Foreground service init error: $e');
+    debugPrint('Foreground service init error: $e');
   }
 
   runApp(
@@ -50,27 +49,17 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
 
-    print('━━━ AuthGate.build() ━━━');
-    print('🔍 isLoggedIn: ${auth.isLoggedIn}');
-    print('🔍 token: ${auth.token?.substring(0, auth.token != null && auth.token!.length > 10 ? 10 : auth.token?.length ?? 0)}...');
-    print('🔍 role: ${auth.role}');
-    print('🔍 courierId: ${auth.courierId}');
-
     if (auth.isLoggedIn) {
       switch (auth.role) {
         case 'admin':
-          print('➡️ Routing to AdminHomeScreen');
           return const AdminHomeScreen();
         case 'courier':
-          print('➡️ Routing to CourierHomeScreen(courierId: ${auth.courierId})');
           return CourierHomeScreen(courierId: auth.courierId);
         default:
-          print('⚠️ Unknown role "${auth.role}", showing LoginScreen');
           return const LoginScreen();
       }
     }
 
-    print('➡️ Not logged in, showing LoginScreen');
     return const LoginScreen();
   }
 }

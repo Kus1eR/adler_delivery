@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -7,24 +8,12 @@ import '../services/admin_service.dart';
 import '../services/auth_service.dart';
 import '../services/foreground_service.dart';
 import '../services/websocket_service.dart';
+import '../utils/date_format.dart';
+import '../utils/pagination.dart';
 import 'courier_detail_screen.dart';
 import 'login_screen.dart';
 import 'map_screen.dart';
 import 'order_detail_screen.dart';
-
-String formatOrderDate(String isoDate) {
-  try {
-    final date = DateTime.parse(isoDate);
-    const months = [
-      'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-    ];
-    return '${date.day} ${months[date.month - 1]}, '
-        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-  } catch (_) {
-    return isoDate;
-  }
-}
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -48,7 +37,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         _startForegroundService();
         _requestNotificationPermission();
       } catch (e) {
-        print('❌ AdminHomeScreen init error: $e');
+        debugPrint('❌ AdminHomeScreen init error: $e');
       }
     });
   }
@@ -58,13 +47,14 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       final plugin = FlutterLocalNotificationsPlugin();
       final androidPlugin = plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (androidPlugin != null) {
         final granted = await androidPlugin.requestNotificationsPermission();
-        print('📱 POST_NOTIFICATIONS permission granted: $granted');
+        debugPrint('📱 POST_NOTIFICATIONS permission granted: $granted');
       }
     } catch (e) {
-      print('❌ Notification permission error: $e');
+      debugPrint('❌ Notification permission error: $e');
     }
   }
 
@@ -75,7 +65,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         ForegroundServiceManager.start(authService.token!, 'admin');
       }
     } catch (e) {
-      print('❌ Foreground service error: $e');
+      debugPrint('❌ Foreground service error: $e');
     }
   }
 
@@ -83,15 +73,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     try {
       final authService = context.read<AuthService>();
       if (authService.token != null) {
-        _wsService = WebSocketService(
-          token: authService.token!,
-          role: 'admin',
-        );
+        _wsService = WebSocketService(token: authService.token!);
         _wsService!.onMessage = (payload) {
           if (!mounted) return;
           final type = payload['type'] as String?;
-          if (type == 'order_taken' || type == 'order_status_changed' || type == 'order_cancelled') {
+          if (type == 'order_taken' ||
+              type == 'order_status_changed' ||
+              type == 'order_cancelled') {
             _ordersTabKey.currentState?.handleWsUpdate(payload);
+            return;
+          }
+          if (type == 'order_updated') {
+            _ordersRefreshSignal.value++;
             return;
           }
           _ordersRefreshSignal.value++;
@@ -99,7 +92,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         _wsService!.connect();
       }
     } catch (e) {
-      print('❌ WebSocket init error: $e');
+      debugPrint('❌ WebSocket init error: $e');
     }
   }
 
@@ -113,7 +106,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget _buildCurrentTab() {
     switch (_currentIndex) {
       case 0:
-        return _OrdersTab(key: _ordersTabKey, refreshSignal: _ordersRefreshSignal);
+        return _OrdersTab(
+          key: _ordersTabKey,
+          refreshSignal: _ordersRefreshSignal,
+        );
       case 1:
         return const _CouriersTab(key: ValueKey('couriers'));
       case 2:
@@ -121,7 +117,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       case 3:
         return const MapScreen();
       default:
-        return _OrdersTab(key: _ordersTabKey, refreshSignal: _ordersRefreshSignal);
+        return _OrdersTab(
+          key: _ordersTabKey,
+          refreshSignal: _ordersRefreshSignal,
+        );
     }
   }
 
@@ -142,7 +141,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                 );
               } catch (e) {
-                print('❌ Logout error: $e');
+                debugPrint('❌ Logout error: $e');
               }
             },
           ),
@@ -196,6 +195,13 @@ class _OrdersTabState extends State<_OrdersTab> {
   bool _isLoading = true;
   String _activeFilter = 'all';
   String? _error;
+  int _page = 1;
+  int _total = 0;
+  int _pages = 1;
+
+  final _searchCtrl = TextEditingController();
+  Timer? _debounceTimer;
+  String _searchQuery = '';
 
   final _numberCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
@@ -214,7 +220,9 @@ class _OrdersTabState extends State<_OrdersTab> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     widget.refreshSignal.removeListener(_loadOrders);
+    _searchCtrl.dispose();
     _numberCtrl.dispose();
     _addressCtrl.dispose();
     _priceCtrl.dispose();
@@ -253,6 +261,7 @@ class _OrdersTabState extends State<_OrdersTab> {
           price: _orders[idx].price,
           courierFee: _orders[idx].courierFee,
           description: _orders[idx].description,
+          cancelReason: _orders[idx].cancelReason,
           recipientPhone: _orders[idx].recipientPhone,
           adminPhone: _orders[idx].adminPhone,
           status: newStatus,
@@ -264,28 +273,43 @@ class _OrdersTabState extends State<_OrdersTab> {
     });
   }
 
-  Future<void> _loadOrders() async {
+  Future<void> _loadOrders({int? page}) async {
     try {
       setState(() {
         _isLoading = true;
         _error = null;
       });
-      final orders = await _adminService.getAllOrders(
+      final targetPage = page ?? _page;
+      final PageResult<Order> result = await _adminService.getOrdersPage(
         status: _activeFilter == 'all' ? null : _activeFilter,
+        search: _searchQuery.isNotEmpty ? _searchQuery : null,
+        page: targetPage,
+        perPage: 50,
       );
       if (!mounted) return;
       setState(() {
-        _orders = orders;
+        _orders = result.items;
+        _page = result.page;
+        _total = result.total;
+        _pages = result.pages == 0 ? 1 : result.pages;
         _isLoading = false;
       });
     } catch (e) {
-      print('❌ _loadOrders error: $e');
+      debugPrint('❌ _loadOrders error: $e');
       if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
       });
     }
+  }
+
+  void _onSearchChanged(String value) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _searchQuery = value.trim();
+      _loadOrders(page: 1);
+    });
   }
 
   Color statusColor(String status) {
@@ -320,25 +344,25 @@ class _OrdersTabState extends State<_OrdersTab> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-                  TextField(
-                    controller: _numberCtrl,
-                    keyboardType: TextInputType.text,
-                    inputFormatters: [],
-                    decoration: const InputDecoration(
-                      labelText: 'Номер заказа',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _addressCtrl,
-                    keyboardType: TextInputType.text,
-                    inputFormatters: [],
-                    decoration: const InputDecoration(
-                      labelText: 'Адрес',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+              TextField(
+                controller: _numberCtrl,
+                keyboardType: TextInputType.text,
+                inputFormatters: [],
+                decoration: const InputDecoration(
+                  labelText: 'Номер заказа',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _addressCtrl,
+                keyboardType: TextInputType.text,
+                inputFormatters: [],
+                decoration: const InputDecoration(
+                  labelText: 'Адрес',
+                  border: OutlineInputBorder(),
+                ),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _priceCtrl,
@@ -404,7 +428,8 @@ class _OrdersTabState extends State<_OrdersTab> {
               final number = _numberCtrl.text.trim();
               final address = _addressCtrl.text.trim();
               final price = double.tryParse(_priceCtrl.text.trim());
-              final courierFee = double.tryParse(_courierFeeCtrl.text.trim()) ?? 0;
+              final courierFee =
+                  double.tryParse(_courierFeeCtrl.text.trim()) ?? 0;
 
               if (number.isEmpty || address.isEmpty || price == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -415,16 +440,23 @@ class _OrdersTabState extends State<_OrdersTab> {
 
               try {
                 await _adminService.createOrder(
-                  number, address, price, courierFee, _descCtrl.text.trim(), _recipientPhoneCtrl.text.trim(),
-                  adminPhone: _adminPhoneCtrl.text.trim().isEmpty ? '+79000000000' : _adminPhoneCtrl.text.trim(),
+                  number,
+                  address,
+                  price,
+                  courierFee,
+                  _descCtrl.text.trim(),
+                  _recipientPhoneCtrl.text.trim(),
+                  adminPhone: _adminPhoneCtrl.text.trim().isEmpty
+                      ? '+79000000000'
+                      : _adminPhoneCtrl.text.trim(),
                 );
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx, true);
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.toString())),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(e.toString())));
               }
             },
             child: const Text('Создать'),
@@ -465,35 +497,255 @@ class _OrdersTabState extends State<_OrdersTab> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red.shade700,
+          ),
         );
       }
     }
   }
 
-  Future<void> _confirmCancel(Order order) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _showEditDialog(Order order) async {
+    _numberCtrl.text = order.orderNumber;
+    _addressCtrl.text = order.address;
+    _priceCtrl.text = order.price.toString();
+    _courierFeeCtrl.text = order.courierFee.toString();
+    _descCtrl.text = order.description;
+    _recipientPhoneCtrl.text = order.recipientPhone;
+    _adminPhoneCtrl.text = order.adminPhone;
+    final latitudeCtrl = TextEditingController(text: order.latitude.toString());
+    final longitudeCtrl = TextEditingController(
+      text: order.longitude.toString(),
+    );
+
+    final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Отменить заказ?'),
-        content: Text('Заказ ${order.orderNumber} будет отменён.'),
+        title: Text('Редактировать ${order.orderNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _numberCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Номер заказа',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _addressCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Адрес',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _priceCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Сумма заказа',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _courierFeeCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Курьеру',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _descCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Комментарий',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _recipientPhoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Телефон получателя',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _adminPhoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Телефон администратора',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: latitudeCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                        signed: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Широта',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: longitudeCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                        signed: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Долгота',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Нет'),
+            child: const Text('Отмена'),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Да, отменить', style: TextStyle(color: Colors.white)),
+          FilledButton(
+            onPressed: () async {
+              final price = double.tryParse(_priceCtrl.text.trim());
+              final courierFee = double.tryParse(_courierFeeCtrl.text.trim());
+              final latitude = double.tryParse(latitudeCtrl.text.trim());
+              final longitude = double.tryParse(longitudeCtrl.text.trim());
+              if (_numberCtrl.text.trim().isEmpty ||
+                  _addressCtrl.text.trim().isEmpty ||
+                  price == null ||
+                  price <= 0 ||
+                  courierFee == null ||
+                  courierFee < 0 ||
+                  latitude == null ||
+                  longitude == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Проверьте введённые значения')),
+                );
+                return;
+              }
+              try {
+                await _adminService.updateOrder(order.id, {
+                  'order_number': _numberCtrl.text.trim(),
+                  'address': _addressCtrl.text.trim(),
+                  'price': price,
+                  'courier_fee': courierFee,
+                  'description': _descCtrl.text.trim(),
+                  'recipient_phone': _recipientPhoneCtrl.text.trim(),
+                  'admin_phone': _adminPhoneCtrl.text.trim(),
+                  'latitude': latitude,
+                  'longitude': longitude,
+                });
+                if (ctx.mounted) Navigator.pop(ctx, true);
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            },
+            child: const Text('Сохранить'),
           ),
         ],
       ),
     );
 
-    if (confirmed == true) {
+    latitudeCtrl.dispose();
+    longitudeCtrl.dispose();
+    if (result == true) {
+      await _loadOrders();
+    }
+  }
+
+  Future<void> _confirmCancel(Order order) async {
+    final reasonController = TextEditingController();
+    String? validationError;
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Отменить заказ?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Заказ ${order.orderNumber} будет отменён.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                minLines: 3,
+                maxLines: 5,
+                maxLength: 500,
+                decoration: InputDecoration(
+                  labelText: 'Причина отмены',
+                  hintText: 'От 3 до 500 символов',
+                  errorText: validationError,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Нет'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                final value = reasonController.text.trim();
+                if (value.length < 3) {
+                  setDialogState(
+                    () => validationError = 'Введите минимум 3 символа',
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, value);
+              },
+              child: const Text(
+                'Да, отменить',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    reasonController.dispose();
+
+    if (reason != null) {
       try {
-        await _adminService.cancelOrder(order.id);
+        await _adminService.cancelOrder(order.id, reason);
         _loadOrders();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -502,7 +754,10 @@ class _OrdersTabState extends State<_OrdersTab> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
         );
       }
     }
@@ -514,6 +769,18 @@ class _OrdersTabState extends State<_OrdersTab> {
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: _onSearchChanged,
+            decoration: InputDecoration(
+              hintText: 'Поиск по номеру или адресу',
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Row(
@@ -556,7 +823,7 @@ class _OrdersTabState extends State<_OrdersTab> {
       selected: selected,
       onSelected: (_) {
         setState(() => _activeFilter = value);
-        _loadOrders();
+        _loadOrders(page: 1);
       },
     );
   }
@@ -591,125 +858,203 @@ class _OrdersTabState extends State<_OrdersTab> {
           children: [
             Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 8),
-            Text('Нет заказов', style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey)),
+            Text(
+              'Нет заказов',
+              style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey),
+            ),
           ],
         ),
       );
     }
 
-      final filteredOrders = _orders.where((o) => o.status != 'cancelled').toList();
+    final filteredOrders = _orders;
 
-      return RefreshIndicator(
-        onRefresh: _loadOrders,
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: filteredOrders.length,
-          itemBuilder: (context, index) {
-            final order = filteredOrders[index];
-          final canDelete = order.status == 'available';
-
-          return Dismissible(
-            key: ValueKey(order.id),
-            direction: canDelete ? DismissDirection.endToStart : DismissDirection.none,
-            background: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.only(right: 20),
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: Colors.red.shade600,
-                borderRadius: BorderRadius.circular(12),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            children: [
+              Text('Показано ${filteredOrders.length} из $_total'),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Предыдущая страница',
+                onPressed: _page > 1
+                    ? () => _loadOrders(page: _page - 1)
+                    : null,
+                icon: const Icon(Icons.chevron_left),
               ),
-              child: const Icon(Icons.delete, color: Colors.white),
-            ),
-            confirmDismiss: (_) async {
-              await _confirmDelete(order);
-              return false;
-            },
-            child: Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => OrderDetailScreen(order: order),
+              Text('$_page / $_pages'),
+              IconButton(
+                tooltip: 'Следующая страница',
+                onPressed: _page < _pages
+                    ? () => _loadOrders(page: _page + 1)
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _loadOrders(page: _page),
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: filteredOrders.length,
+              itemBuilder: (context, index) {
+                final order = filteredOrders[index];
+                final canDelete = order.status == 'available';
+
+                return Dismissible(
+                  key: ValueKey(order.id),
+                  direction: canDelete
+                      ? DismissDirection.endToStart
+                      : DismissDirection.none,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade600,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.delete, color: Colors.white),
                   ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  confirmDismiss: (_) async {
+                    await _confirmDelete(order);
+                    return false;
+                  },
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OrderDetailScreen(order: order),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Row(
                           children: [
-                            Text(order.orderNumber, style: const TextStyle(fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 2),
-                            Text(order.address, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    order.orderNumber,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    order.address,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${order.price.toStringAsFixed(0)} ₽',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: statusColor(
+                                      order.status,
+                                    ).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    order.statusLabel,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: statusColor(order.status),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (order.status == 'available' ||
+                                    order.status == 'taken') ...[
+                                  const SizedBox(height: 2),
+                                  SizedBox(
+                                    height: 22,
+                                    child: TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        foregroundColor: Colors.red,
+                                      ),
+                                      onPressed: () => _confirmCancel(order),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.cancel, size: 12),
+                                          SizedBox(width: 2),
+                                          Text(
+                                            'Отменить',
+                                            style: TextStyle(fontSize: 9),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                SizedBox(
+                                  height: 22,
+                                  child: TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    onPressed: () => _showEditDialog(order),
+                                    icon: const Icon(Icons.edit, size: 12),
+                                    label: const Text(
+                                      'Редактировать',
+                                      style: TextStyle(fontSize: 9),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${order.price.toStringAsFixed(0)} ₽',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: statusColor(order.status).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              order.statusLabel,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: statusColor(order.status),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (order.status == 'available' || order.status == 'taken') ...[
-                            const SizedBox(height: 2),
-                            SizedBox(
-                              height: 22,
-                              child: TextButton(
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  foregroundColor: Colors.red,
-                                ),
-                                onPressed: () => _confirmCancel(order),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.cancel, size: 12),
-                                    SizedBox(width: 2),
-                                    Text('Отменить', style: TextStyle(fontSize: 9)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -728,16 +1073,15 @@ class _CouriersTabState extends State<_CouriersTab> {
   List<Courier> _couriers = [];
   bool _isLoading = true;
   String? _error;
-  bool _initialized = false;
 
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initialized = true;
       _loadCouriers();
     });
   }
@@ -746,6 +1090,7 @@ class _CouriersTabState extends State<_CouriersTab> {
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
@@ -762,7 +1107,7 @@ class _CouriersTabState extends State<_CouriersTab> {
         _isLoading = false;
       });
     } catch (e) {
-      print('❌ _loadCouriers error: $e');
+      debugPrint('❌ _loadCouriers error: $e');
       if (!mounted) return;
       setState(() {
         _error = e.toString();
@@ -774,65 +1119,101 @@ class _CouriersTabState extends State<_CouriersTab> {
   Future<void> _showAddDialog() async {
     _nameCtrl.clear();
     _phoneCtrl.clear();
+    _passwordCtrl.clear();
+    var obscurePassword = true;
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Добавить курьера'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _nameCtrl,
-              keyboardType: TextInputType.text,
-              inputFormatters: [],
-              decoration: const InputDecoration(
-                labelText: 'Имя',
-                border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Добавить курьера'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _nameCtrl,
+                keyboardType: TextInputType.text,
+                inputFormatters: [],
+                decoration: const InputDecoration(
+                  labelText: 'Имя',
+                  border: OutlineInputBorder(),
+                ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Телефон',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordCtrl,
+                obscureText: obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Пароль',
+                  helperText: 'Минимум 6 символов',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    onPressed: () => setDialogState(
+                      () => obscurePassword = !obscurePassword,
+                    ),
+                    icon: Icon(
+                      obscurePassword ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    tooltip: obscurePassword
+                        ? 'Показать пароль'
+                        : 'Скрыть пароль',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Телефон',
-                border: OutlineInputBorder(),
-              ),
+            FilledButton(
+              onPressed: () async {
+                final name = _nameCtrl.text.trim();
+                final phone = _phoneCtrl.text.trim();
+                final password = _passwordCtrl.text;
+
+                if (name.isEmpty || phone.isEmpty || password.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Заполните все поля')),
+                  );
+                  return;
+                }
+                if (password.length < 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Пароль должен содержать минимум 6 символов',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  await _adminService.createCourier(name, phone, password);
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx, true);
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(e.toString())));
+                }
+              },
+              child: const Text('Добавить'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final name = _nameCtrl.text.trim();
-              final phone = _phoneCtrl.text.trim();
-
-              if (name.isEmpty || phone.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Заполните все поля')),
-                );
-                return;
-              }
-
-              try {
-                await _adminService.createCourier(name, phone);
-                if (!ctx.mounted) return;
-                Navigator.pop(ctx, true);
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.toString())),
-                );
-              }
-            },
-            child: const Text('Добавить'),
-          ),
-        ],
       ),
     );
 
@@ -859,9 +1240,9 @@ class _CouriersTabState extends State<_CouriersTab> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -921,7 +1302,10 @@ class _CouriersTabState extends State<_CouriersTab> {
           children: [
             Icon(Icons.person_outline, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 8),
-            Text('Нет курьеров', style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey)),
+            Text(
+              'Нет курьеров',
+              style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey),
+            ),
           ],
         ),
       );
@@ -950,17 +1334,25 @@ class _CouriersTabState extends State<_CouriersTab> {
                     : Colors.red.shade100,
                 child: Icon(
                   Icons.person,
-                  color: courier.isActive ? Colors.green.shade700 : Colors.red.shade700,
+                  color: courier.isActive
+                      ? Colors.green.shade700
+                      : Colors.red.shade700,
                 ),
               ),
-              title: Text(courier.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              title: Text(
+                courier.name,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               subtitle: Text(courier.phone),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: courier.isActive
                           ? Colors.green.withValues(alpha: 0.15)
@@ -972,7 +1364,9 @@ class _CouriersTabState extends State<_CouriersTab> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: courier.isActive ? Colors.green.shade700 : Colors.red.shade700,
+                        color: courier.isActive
+                            ? Colors.green.shade700
+                            : Colors.red.shade700,
                       ),
                     ),
                   ),
@@ -984,8 +1378,12 @@ class _CouriersTabState extends State<_CouriersTab> {
                         padding: const EdgeInsets.symmetric(horizontal: 6),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        foregroundColor: courier.isActive ? Colors.red.shade700 : Colors.green.shade700,
-                        backgroundColor: courier.isActive ? Colors.red.shade50 : Colors.green.shade50,
+                        foregroundColor: courier.isActive
+                            ? Colors.red.shade700
+                            : Colors.green.shade700,
+                        backgroundColor: courier.isActive
+                            ? Colors.red.shade50
+                            : Colors.green.shade50,
                       ),
                       onPressed: () => _toggleBlock(courier),
                       child: Text(
@@ -1038,7 +1436,7 @@ class _StatsTabState extends State<_StatsTab> {
         _isLoading = false;
       });
     } catch (e) {
-      print('❌ _loadStats error: $e');
+      debugPrint('❌ _loadStats error: $e');
       if (!mounted) return;
       setState(() {
         _error = e.toString();
@@ -1077,7 +1475,8 @@ class _StatsTabState extends State<_StatsTab> {
     final activeOrders = _stats?['active_orders'] ?? 0;
     final deliveredOrders = _stats?['delivered_orders'] ?? 0;
     final totalRevenue = (_stats?['total_revenue'] ?? 0).toDouble();
-    final recentOrders = (_stats?['recent_orders'] as List<dynamic>?)
+    final recentOrders =
+        (_stats?['recent_orders'] as List<dynamic>?)
             ?.map((e) => Order.fromJson(e as Map<String, dynamic>))
             .toList() ??
         <Order>[];
@@ -1169,15 +1568,23 @@ class _StatsTabState extends State<_StatsTab> {
               (order) => Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  title: Text(order.orderNumber, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(formatOrderDate(order.createdAt)),
+                  title: Text(
+                    order.orderNumber,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(formatOrderDateOrOriginal(order.createdAt)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: statusColor(order.status).withValues(alpha: 0.15),
+                          color: statusColor(
+                            order.status,
+                          ).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(

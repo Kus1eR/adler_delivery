@@ -5,6 +5,7 @@ class Order {
   final double price;
   final double courierFee;
   final String description;
+  final String? cancelReason;
   final String recipientPhone;
   final String adminPhone;
   final String status;
@@ -19,6 +20,7 @@ class Order {
     required this.price,
     this.courierFee = 0.0,
     required this.description,
+    this.cancelReason,
     this.recipientPhone = '',
     this.adminPhone = '+79000000000',
     required this.status,
@@ -35,6 +37,7 @@ class Order {
       price: (json['price'] as num).toDouble(),
       courierFee: (json['courier_fee'] as num?)?.toDouble() ?? 0.0,
       description: json['description'] as String? ?? '',
+      cancelReason: json['cancel_reason'] as String?,
       recipientPhone: json['recipient_phone'] as String? ?? '',
       adminPhone: json['admin_phone'] as String? ?? '+79000000000',
       status: json['status'] as String? ?? 'available',

@@ -1,7 +1,10 @@
 import json
+import logging
 from typing import Any
 
 from fastapi import WebSocket
+
+logger = logging.getLogger(__name__)
 
 
 class WebSocketManager:
@@ -9,16 +12,18 @@ class WebSocketManager:
         self.admin_connections: list[WebSocket] = []
         self.courier_connections: dict[int, list[WebSocket]] = {}
 
-    async def connect_admin(self, ws: WebSocket):
-        await ws.accept()
+    async def connect_admin(self, ws: WebSocket, subprotocol: str):
+        await ws.accept(subprotocol=subprotocol)
         self.admin_connections.append(ws)
 
     def disconnect_admin(self, ws: WebSocket):
         if ws in self.admin_connections:
             self.admin_connections.remove(ws)
 
-    async def connect_courier(self, courier_id: int, ws: WebSocket):
-        await ws.accept()
+    async def connect_courier(
+        self, courier_id: int, ws: WebSocket, subprotocol: str
+    ):
+        await ws.accept(subprotocol=subprotocol)
         self.courier_connections.setdefault(courier_id, []).append(ws)
 
     def disconnect_courier(self, courier_id: int, ws: WebSocket):
@@ -31,7 +36,8 @@ class WebSocketManager:
         for ws in self.admin_connections.copy():
             try:
                 await ws.send_text(msg)
-            except Exception:
+            except Exception as e:
+                logger.error("WS broadcast to admin failed: %s", e)
                 self.disconnect_admin(ws)
 
     async def send_to_courier(self, courier_id: int, event: str, data: dict[str, Any]):
@@ -39,7 +45,8 @@ class WebSocketManager:
         for ws in self.courier_connections.get(courier_id, []).copy():
             try:
                 await ws.send_text(msg)
-            except Exception:
+            except Exception as e:
+                logger.error("WS send to courier %d failed: %s", courier_id, e)
                 self.disconnect_courier(courier_id, ws)
 
     async def broadcast_to_all_couriers(self, event: str, data: dict[str, Any]):
@@ -48,7 +55,8 @@ class WebSocketManager:
             for ws in self.courier_connections[courier_id].copy():
                 try:
                     await ws.send_text(msg)
-                except Exception:
+                except Exception as e:
+                    logger.error("WS broadcast to courier %d failed: %s", courier_id, e)
                     self.disconnect_courier(courier_id, ws)
 
 

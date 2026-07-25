@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'foreground_service.dart';
+import 'offline_queue.dart';
 
 class AuthService extends ChangeNotifier {
   final ApiService _api = ApiService();
@@ -49,12 +50,12 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<void> loginCourier(String phone) async {
+  Future<void> loginCourier(String phone, String password) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final data = await _api.loginCourier(phone);
+      final data = await _api.loginCourier(phone, password);
       await _saveSession(data);
     } catch (e) {
       _isLoading = false;
@@ -75,7 +76,9 @@ class AuthService extends ChangeNotifier {
     _role = (data['role'] ?? jwtPayload['role']) as String?;
 
     final rawUserId = data['user_id'] ?? jwtPayload['sub'];
-    _courierId = rawUserId is int ? rawUserId : int.tryParse(rawUserId?.toString() ?? '');
+    _courierId = rawUserId is int
+        ? rawUserId
+        : int.tryParse(rawUserId?.toString() ?? '');
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', _token ?? '');
@@ -90,10 +93,13 @@ class AuthService extends ChangeNotifier {
 
   Future<void> logout() async {
     await ForegroundServiceManager.stop();
+    final courierId = _courierId;
+    if (courierId != null) await OfflineQueue.clear(courierId);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('role');
     await prefs.remove('courier_id');
+    await prefs.remove('pending_order_id');
 
     _token = null;
     _role = null;

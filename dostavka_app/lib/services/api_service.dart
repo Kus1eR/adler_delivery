@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -28,14 +29,13 @@ class ApiService {
     String username,
     String password,
   ) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/admin/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/api/admin/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'username': username, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -43,14 +43,17 @@ class ApiService {
     throw ApiException.fromStatusCode(response.statusCode, response.body);
   }
 
-  Future<Map<String, dynamic>> loginCourier(String phone) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/api/courier/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'phone': phone,
-      }),
-    );
+  Future<Map<String, dynamic>> loginCourier(
+    String phone,
+    String password,
+  ) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/api/courier/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'phone': phone, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -69,10 +72,9 @@ class ApiService {
 
   Future<List<dynamic>> getList(String path) async {
     final headers = await _authHeaders();
-    final response = await http.get(
-      Uri.parse('$baseUrl$path'),
-      headers: headers,
-    );
+    final response = await http
+        .get(Uri.parse('$baseUrl$path'), headers: headers)
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as List<dynamic>;
@@ -82,10 +84,9 @@ class ApiService {
 
   Future<Map<String, dynamic>> get(String path) async {
     final headers = await _authHeaders();
-    final response = await http.get(
-      Uri.parse('$baseUrl$path'),
-      headers: headers,
-    );
+    final response = await http
+        .get(Uri.parse('$baseUrl$path'), headers: headers)
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -98,11 +99,13 @@ class ApiService {
     Map<String, dynamic> body,
   ) async {
     final headers = await _authHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl$path'),
-      headers: headers,
-      body: jsonEncode(body),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl$path'),
+          headers: headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -115,11 +118,13 @@ class ApiService {
     Map<String, dynamic> body,
   ) async {
     final headers = await _authHeaders();
-    final response = await http.patch(
-      Uri.parse('$baseUrl$path'),
-      headers: headers,
-      body: jsonEncode(body),
-    );
+    final response = await http
+        .patch(
+          Uri.parse('$baseUrl$path'),
+          headers: headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -159,13 +164,15 @@ class ApiService {
   }
 
   Future<List<dynamic>> getListWithToken(String path, String token) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl$path'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
+    final response = await http
+        .get(
+          Uri.parse('$baseUrl$path'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        )
+        .timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as List<dynamic>;
     }

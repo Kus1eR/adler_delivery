@@ -5,13 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
 import '../services/courier_service.dart';
+import '../utils/date_format.dart';
 import 'login_screen.dart';
-
-String formatOrderDate(String isoDate) {
-  final date = DateTime.parse(isoDate);
-  final months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
-  return '${date.day} ${months[date.month - 1]}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-}
 
 class OrderDetailScreen extends StatelessWidget {
   const OrderDetailScreen({super.key, required this.order});
@@ -60,7 +55,9 @@ class OrderDetailScreen extends StatelessWidget {
   }
 
   Future<void> _handleAction(BuildContext context) async {
-    final courierService = CourierService();
+    final courierId = context.read<AuthService>().courierId;
+    if (courierId == null) return;
+    final courierService = CourierService(courierId: courierId);
     final nextStatus = _nextStatus(order.status);
     final scaffold = ScaffoldMessenger.of(context);
 
@@ -68,9 +65,7 @@ class OrderDetailScreen extends StatelessWidget {
       if (order.status == 'available') {
         await courierService.takeOrder(order.id);
         if (!context.mounted) return;
-        scaffold.showSnackBar(
-          const SnackBar(content: Text('Заказ взят')),
-        );
+        scaffold.showSnackBar(const SnackBar(content: Text('Заказ взят')));
       } else if (nextStatus != null) {
         await courierService.updateOrderStatus(order.id, nextStatus);
         if (!context.mounted) return;
@@ -84,12 +79,18 @@ class OrderDetailScreen extends StatelessWidget {
     } on Exception catch (e) {
       if (!context.mounted) return;
       scaffold.showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.red.shade700,
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
       scaffold.showSnackBar(
-        SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red.shade700),
+        SnackBar(
+          content: Text('Ошибка: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
       );
     }
   }
@@ -110,7 +111,9 @@ class OrderDetailScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Позвонить $title'),
-        content: Text('Номер: $phone\n\nНажмите "Позвонить", чтобы скопировать номер в буфер обмена и позвонить через телефонную книгу.'),
+        content: Text(
+          'Номер: $phone\n\nНажмите "Позвонить", чтобы скопировать номер в буфер обмена и позвонить через телефонную книгу.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -123,7 +126,9 @@ class OrderDetailScreen extends StatelessWidget {
               Clipboard.setData(ClipboardData(text: phone));
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Номер $phone скопирован в буфер обмена')),
+                SnackBar(
+                  content: Text('Номер $phone скопирован в буфер обмена'),
+                ),
               );
             },
           ),
@@ -198,25 +203,56 @@ class OrderDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             _infoRow(
-              theme, Icons.location_on, 'Адрес', order.address,
+              theme,
+              Icons.location_on,
+              'Адрес',
+              order.address,
               onTap: () => _openYandexMaps(order.address),
             ),
             if (order.recipientPhone.isNotEmpty) ...[
               const SizedBox(height: 16),
               _infoRow(
-                theme, Icons.phone, 'Телефон получателя', order.recipientPhone,
-                onTap: () => Clipboard.setData(ClipboardData(text: order.recipientPhone)),
+                theme,
+                Icons.phone,
+                'Телефон получателя',
+                order.recipientPhone,
+                onTap: () => Clipboard.setData(
+                  ClipboardData(text: order.recipientPhone),
+                ),
               ),
             ],
             const SizedBox(height: 16),
-            _infoRow(theme, Icons.attach_money, 'Сумма заказа',
-                '${order.price.toStringAsFixed(0)} ₽'),
+            _infoRow(
+              theme,
+              Icons.attach_money,
+              'Сумма заказа',
+              '${order.price.toStringAsFixed(0)} ₽',
+            ),
             if (order.description.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _infoRow(theme, Icons.comment, 'Комментарий курьеру', order.description),
+              _infoRow(
+                theme,
+                Icons.comment,
+                'Комментарий курьеру',
+                order.description,
+              ),
+            ],
+            if (order.cancelReason?.isNotEmpty == true) ...[
+              const SizedBox(height: 16),
+              _infoRow(
+                theme,
+                Icons.cancel_outlined,
+                'Причина отмены',
+                order.cancelReason!,
+              ),
             ],
             const SizedBox(height: 16),
-            _infoRow(theme, Icons.access_time, 'Создан', formatOrderDate(order.createdAt)),
+            _infoRow(
+              theme,
+              Icons.access_time,
+              'Создан',
+              formatOrderDate(order.createdAt),
+            ),
             const SizedBox(height: 32),
             if (canAct && isCourier)
               SizedBox(
@@ -228,7 +264,10 @@ class OrderDetailScreen extends StatelessWidget {
                     backgroundColor: theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
                   ),
-                  child: Text(actionLabel, style: const TextStyle(fontSize: 18)),
+                  child: Text(
+                    actionLabel,
+                    style: const TextStyle(fontSize: 18),
+                  ),
                 ),
               ),
             if (order.recipientPhone.isNotEmpty)
@@ -254,7 +293,13 @@ class OrderDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(ThemeData theme, IconData icon, String label, String value, {VoidCallback? onTap}) {
+  Widget _infoRow(
+    ThemeData theme,
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -263,7 +308,13 @@ class OrderDetailScreen extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 20, color: onTap != null ? Colors.blue.shade600 : theme.colorScheme.primary),
+            Icon(
+              icon,
+              size: 20,
+              color: onTap != null
+                  ? Colors.blue.shade600
+                  : theme.colorScheme.primary,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -280,7 +331,9 @@ class OrderDetailScreen extends StatelessWidget {
                     value,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: onTap != null ? Colors.blue.shade700 : null,
-                      decoration: onTap != null ? TextDecoration.underline : null,
+                      decoration: onTap != null
+                          ? TextDecoration.underline
+                          : null,
                     ),
                   ),
                 ],

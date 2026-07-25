@@ -3,9 +3,11 @@ uvicorn[standard]
 sqlalchemy[asyncio]
 alembic
 python-jose[cryptography]
-passlib[bcrypt]
 pydantic-settings
 aiosqlite
+asyncpg
+psycopg[binary]
 watchfiles
 python-multipart
 bcrypt<5
+slowapi

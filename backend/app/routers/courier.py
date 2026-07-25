@@ -1,41 +1,31 @@
-import re
-from datetime import datetime
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import create_access_token, get_current_courier
+from app.auth import create_access_token, get_current_courier, verify_password
 from app.database import get_db
+from app.limiter import limiter
 from app.models import Courier, CourierLocation, Order, OrderHistory
 from app.schemas import CourierLogin, CourierStats, LocationUpdate, OrderOut, OrderStatusUpdate, Token
+from app.services.order_service import can_transition, transition_order
+from app.utils import normalize_phone, utc_now
 from app.ws_manager import ws_manager
 
-router = APIRouter(prefix="/api/courier", tags=["Courier"])
-
-
-def _normalize_phone(phone: str) -> str:
-    """Normalize to +7XXXXXXXXXX format. Accepts +7, 8, 7 prefixes with any separators."""
-    digits = re.sub(r"\D", "", phone.strip())
-    if digits.startswith("8") and len(digits) == 11:
-        digits = "+7" + digits[1:]
-    elif digits.startswith("7") and len(digits) == 11:
-        digits = "+" + digits
-    elif len(digits) == 10:
-        digits = "+7" + digits
-    return digits
+router = APIRouter(tags=["Courier"])
 
 
 @router.post("/login", response_model=Token)
-async def courier_login(body: CourierLogin, db: AsyncSession = Depends(get_db)):
-    normalized = _normalize_phone(body.phone)
-    result = await db.execute(select(Courier))
-    courier = next(
-        (c for c in result.scalars().all() if _normalize_phone(c.phone) == normalized),
-        None,
-    )
+@limiter.limit("5/minute")
+async def courier_login(request: Request, body: CourierLogin, db: AsyncSession = Depends(get_db)):
+    normalized = normalize_phone(body.phone)
+    result = await db.execute(select(Courier).where(Courier.phone == normalized))
+    courier = result.scalar_one_or_none()
     if not courier:
         raise HTTPException(status_code=401, detail="Invalid phone")
+    if not verify_password(body.password, courier.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid password")
     if courier.status == "blocked":
         raise HTTPException(status_code=403, detail="Courier blocked")
     token = create_access_token({"sub": courier.id, "role": "courier"})
@@ -48,7 +38,10 @@ async def available_orders(
     courier: Courier = Depends(get_current_courier),
 ):
     result = await db.execute(
-        select(Order).where(Order.status == "available").order_by(Order.created_at.desc())
+        select(Order)
+        .where(Order.status == "available")
+        .where(Order.is_deleted.is_(False))
+        .order_by(Order.created_at.desc())
     )
     return result.scalars().all()
 
@@ -59,21 +52,27 @@ async def take_order(
     db: AsyncSession = Depends(get_db),
     courier: Courier = Depends(get_current_courier),
 ):
-    result = await db.execute(select(Order).where(Order.id == order_id))
-    order = result.scalar_one_or_none()
-    if not order:
+    claim = await db.execute(
+        update(Order)
+        .where(
+            Order.id == order_id,
+            Order.status == "available",
+            Order.is_deleted.is_(False),
+        )
+        .values(status="taken", courier_id=courier.id, updated_at=utc_now())
+    )
+    if claim.rowcount != 1:
+        exists = await db.scalar(select(Order.id).where(Order.id == order_id))
+        await db.rollback()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=409, detail="Order is not available")
+
+    db.add(OrderHistory(order_id=order_id, status="taken"))
+    await db.commit()
+    order = await db.scalar(select(Order).where(Order.id == order_id))
+    if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status != "available":
-        raise HTTPException(status_code=400, detail="Order is not available")
-
-    order.status = "taken"
-    order.courier_id = courier.id
-    await db.commit()
-    await db.refresh(order)
-
-    history = OrderHistory(order_id=order.id, status="taken")
-    db.add(history)
-    await db.commit()
 
     await ws_manager.broadcast_to_admins(
         "order_taken", {"id": order.id, "courier_id": courier.id, "courier_name": courier.name}
@@ -96,21 +95,14 @@ async def update_order_status(
     if order.courier_id != courier.id:
         raise HTTPException(status_code=403, detail="Not your order")
 
-    valid_transitions = {
-        "taken": ["in_transit"],
-        "in_transit": ["delivered"],
-    }
+    if not can_transition(order.status, body.status):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid transition from {order.status} to {body.status}",
+        )
 
-    if order.status not in valid_transitions or body.status not in valid_transitions[order.status]:
-        raise HTTPException(status_code=400, detail=f"Invalid transition from {order.status} to {body.status}")
-
-    order.status = body.status
-    await db.commit()
+    await transition_order(order, body.status, db)
     await db.refresh(order)
-
-    history = OrderHistory(order_id=order.id, status=body.status)
-    db.add(history)
-    await db.commit()
 
     await ws_manager.broadcast_to_admins(
         "order_status_changed",
@@ -153,7 +145,7 @@ async def my_stats(
     )
     total_earned = float(result.scalar() or 0)
 
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(
         select(func.count(Order.id)).where(
             Order.courier_id == courier.id, Order.created_at >= today_start
@@ -189,21 +181,24 @@ async def update_location(
     db: AsyncSession = Depends(get_db),
     courier: Courier = Depends(get_current_courier),
 ):
-    stmt = select(CourierLocation).where(CourierLocation.courier_id == courier.id)
-    result = await db.execute(stmt)
-    location = result.scalar_one_or_none()
-
-    if location:
-        location.latitude = body.latitude
-        location.longitude = body.longitude
-        location.updated_at = datetime.utcnow()
+    now = utc_now()
+    values = {
+        "courier_id": courier.id,
+        "latitude": body.latitude,
+        "longitude": body.longitude,
+        "updated_at": now,
+    }
+    dialect_name = db.bind.dialect.name
+    if dialect_name == "postgresql":
+        stmt = postgresql_insert(CourierLocation).values(**values)
+    elif dialect_name == "sqlite":
+        stmt = sqlite_insert(CourierLocation).values(**values)
     else:
-        location = CourierLocation(
-            courier_id=courier.id,
-            latitude=body.latitude,
-            longitude=body.longitude,
-        )
-        db.add(location)
-
+        raise HTTPException(status_code=500, detail="Unsupported database dialect")
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[CourierLocation.courier_id],
+        set_={key: value for key, value in values.items() if key != "courier_id"},
+    )
+    await db.execute(stmt)
     await db.commit()
     return {"status": "ok"}

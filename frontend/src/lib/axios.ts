@@ -24,11 +24,4 @@ api.interceptors.response.use(
   },
 )
 
-export const wsUrl = () => {
-  const token = useAuthStore.getState().token
-  const base = import.meta.env.VITE_API_BASE_URL || ''
-  const wsBase = base.replace(/^http/, 'ws')
-  return `${wsBase}/ws/admin?token=${token}`
-}
-
 export default api

@@ -6,7 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dostavka_app/services/auth_service.dart';
-import 'package:dostavka_app/services/api_service.dart';
+import 'package:dostavka_app/services/admin_service.dart';
 import 'package:dostavka_app/utils/map_utils.dart';
 
 class MapScreen extends StatefulWidget {
@@ -29,6 +29,7 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _droppedMarker;
   LatLng? _currentPosition;
   bool _initialized = false;
+  final _adminService = AdminService();
 
   @override
   void initState() {
@@ -47,7 +48,7 @@ class _MapScreenState extends State<MapScreen> {
       _getCurrentPosition();
       _loadData();
     } catch (e) {
-      print('❌ MapScreen _initialize error: $e');
+      debugPrint('MapScreen initialization error: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -78,34 +79,24 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
     } catch (e) {
-      print('❌ MapScreen getCurrentPosition error: $e');
+      debugPrint('MapScreen location error: $e');
     }
   }
 
   Future<void> _loadData() async {
     try {
-      final ordersRes = await http.get(
-        Uri.parse('${ApiService.baseUrl}/api/admin/orders'),
-        headers: {'Authorization': 'Bearer $_token'},
-      );
-      final courierRes = await http.get(
-        Uri.parse('${ApiService.baseUrl}/api/admin/couriers/locations'),
-        headers: {'Authorization': 'Bearer $_token'},
-      );
-
-      if (ordersRes.statusCode != 200 || courierRes.statusCode != 200) {
-        print('❌ MapScreen _loadData HTTP error: orders=${ordersRes.statusCode} couriers=${courierRes.statusCode}');
-        throw Exception('Ошибка сервера: ${ordersRes.statusCode}');
-      }
-
-      final allOrders = jsonDecode(ordersRes.body) as List;
+      final results = await Future.wait([
+        _adminService.fetchAllOrderData(),
+        _adminService.getCourierLocations(_token!),
+      ]);
+      final allOrders = results[0];
       setState(() {
-        _orders = allOrders.where((o) => o is Map && o['status'] != 'delivered').cast<Map<String, dynamic>>().toList();
-        _couriers = (jsonDecode(courierRes.body) as List).cast<Map<String, dynamic>>();
+        _orders = allOrders.where((o) => o['status'] != 'delivered').toList();
+        _couriers = results[1];
         _loading = false;
       });
     } catch (e) {
-      print('❌ MapScreen _loadData error: $e');
+      debugPrint('MapScreen data error: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -134,7 +125,10 @@ class _MapScreenState extends State<MapScreen> {
       '&addressdetails=1',
     );
     try {
-      final response = await http.get(url, headers: {'User-Agent': 'DostavkaApp/1.0'});
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'DostavkaApp/1.0'},
+      );
       return (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
     } catch (_) {
       return [];
@@ -152,7 +146,7 @@ class _MapScreenState extends State<MapScreen> {
         setState(() => _searchResults = results);
       }
     } catch (e) {
-      print('❌ MapScreen search error: $e');
+      debugPrint('MapScreen search error: $e');
     }
   }
 
@@ -170,7 +164,9 @@ class _MapScreenState extends State<MapScreen> {
         itemCount: _searchResults.length,
         itemBuilder: (ctx, i) {
           final result = _searchResults[i];
-          final dispName = result['display_name']?.toString().split(',').take(3).join(',') ?? '';
+          final dispName =
+              result['display_name']?.toString().split(',').take(3).join(',') ??
+              '';
           return ListTile(
             leading: const Icon(Icons.location_on),
             title: Text(dispName),
@@ -224,15 +220,16 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_initialized || _loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Карта'), actions: [
-        IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
-      ]),
+      appBar: AppBar(
+        title: const Text('Карта'),
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
+        ],
+      ),
       body: Stack(
         children: [
           FlutterMap(
@@ -254,41 +251,55 @@ class _MapScreenState extends State<MapScreen> {
                   if (_droppedMarker != null)
                     Marker(
                       point: _droppedMarker!,
-                      child: const Icon(Icons.push_pin, color: Colors.red, size: 40),
-                    ),
-                  ..._orders.map((order) => Marker(
-                    point: LatLng(
-                      (order['latitude'] as num).toDouble(),
-                      (order['longitude'] as num).toDouble(),
-                    ),
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _selectedOrder = order;
-                        _selectedCourier = null;
-                      }),
-                      child: Icon(
-                        Icons.room,
-                        color: _orderColor(order['status']),
-                        size: MapUtils.markerSize,
+                      child: const Icon(
+                        Icons.push_pin,
+                        color: Colors.red,
+                        size: 40,
                       ),
                     ),
-                  )),
+                  ..._orders.map(
+                    (order) => Marker(
+                      point: LatLng(
+                        (order['latitude'] as num).toDouble(),
+                        (order['longitude'] as num).toDouble(),
+                      ),
+                      child: GestureDetector(
+                        onTap: () => setState(() {
+                          _selectedOrder = order;
+                          _selectedCourier = null;
+                        }),
+                        child: Icon(
+                          Icons.room,
+                          color: _orderColor(order['status']),
+                          size: MapUtils.markerSize,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               MarkerLayer(
-                markers: _couriers.map((courier) => Marker(
-                  point: LatLng(
-                    (courier['latitude'] as num).toDouble(),
-                    (courier['longitude'] as num).toDouble(),
-                  ),
-                  child: GestureDetector(
-                    onTap: () => setState(() {
-                      _selectedCourier = courier;
-                      _selectedOrder = null;
-                    }),
-                    child: const Icon(Icons.delivery_dining, color: MapUtils.courierColor, size: 40),
-                  ),
-                )).toList(),
+                markers: _couriers
+                    .map(
+                      (courier) => Marker(
+                        point: LatLng(
+                          (courier['latitude'] as num).toDouble(),
+                          (courier['longitude'] as num).toDouble(),
+                        ),
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _selectedCourier = courier;
+                            _selectedOrder = null;
+                          }),
+                          child: const Icon(
+                            Icons.delivery_dining,
+                            color: MapUtils.courierColor,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ],
           ),
@@ -304,8 +315,13 @@ class _MapScreenState extends State<MapScreen> {
                     hintText: 'Поиск адреса...',
                     filled: true,
                     fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
                   onChanged: _onSearch,
                 ),
@@ -325,12 +341,7 @@ class _MapScreenState extends State<MapScreen> {
               child: const Icon(Icons.my_location),
             ),
           ),
-          Positioned(
-            left: 8,
-            right: 8,
-            bottom: 8,
-            child: _buildInfoPanel(),
-          ),
+          Positioned(left: 8, right: 8, bottom: 8, child: _buildInfoPanel()),
         ],
       ),
     );
@@ -348,7 +359,10 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               Text(
                 'Заказ ${_selectedOrder!['order_number']}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
               const SizedBox(height: 4),
               Text('Адрес: ${_selectedOrder!['address']}'),
@@ -374,7 +388,10 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               Text(
                 'Курьер: ${_selectedCourier!['name'] ?? _selectedCourier!['courier_name'] ?? 'Неизвестно'}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
               const SizedBox(height: 4),
               Text('Статус: ${_selectedCourier!['status'] ?? 'активен'}'),

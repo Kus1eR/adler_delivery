@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # --- Auth ---
@@ -17,14 +17,37 @@ class AdminLogin(BaseModel):
     password: str
 
 
+class AdminCreate(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8)
+    display_name: Optional[str] = Field(default=None, max_length=200)
+
+
+class AdminOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    display_name: Optional[str]
+    is_active: bool
+    is_superadmin: bool
+    created_at: datetime.datetime
+
+
+class AdminStatusUpdate(BaseModel):
+    is_active: bool
+
+
 class CourierLogin(BaseModel):
     phone: str
+    password: str = Field(min_length=6)
 
 
 # --- Courier ---
 class CourierCreate(BaseModel):
     name: str
     phone: str
+    password: str = Field(min_length=6)
 
 
 class CourierOut(BaseModel):
@@ -47,8 +70,34 @@ class OrderCreate(BaseModel):
     description: Optional[str] = None
     recipient_phone: str = ''
     admin_phone: str = '+79000000000'
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+
+
+class OrderUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    order_number: Optional[str] = None
+    address: Optional[str] = None
+    price: Optional[float] = Field(default=None, gt=0)
+    courier_fee: Optional[float] = Field(default=None, ge=0)
+    description: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    admin_phone: Optional[str] = None
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def require_update(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one field is required")
+        nullable_fields = {"description"}
+        if any(
+            getattr(self, field) is None
+            for field in self.model_fields_set - nullable_fields
+        ):
+            raise ValueError("Updated fields cannot be null")
+        return self
 
 
 class OrderOut(BaseModel):
@@ -58,6 +107,7 @@ class OrderOut(BaseModel):
     price: float
     courier_fee: float
     description: Optional[str]
+    cancel_reason: Optional[str] = None
     recipient_phone: str = ''
     admin_phone: str = '+79000000000'
     status: str
@@ -94,7 +144,15 @@ class AdminStats(BaseModel):
     active_couriers: int
 
 
+class PaginatedOrders(BaseModel):
+    items: list[OrderOut]
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
 # --- Location ---
 class LocationUpdate(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)

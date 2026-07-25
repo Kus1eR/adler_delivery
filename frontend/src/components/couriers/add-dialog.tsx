@@ -13,6 +13,7 @@ import { Label } from '../ui/label'
 const courierSchema = z.object({
   name: z.string().min(1, 'Обязательное поле'),
   phone: z.string().min(1, 'Обязательное поле'),
+  password: z.string().min(6, 'Минимум 6 символов'),
 })
 
 type CourierForm = z.infer<typeof courierSchema>
@@ -27,7 +28,7 @@ export function AddCourierDialog({ open, onOpenChange }: AddCourierDialogProps) 
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<CourierForm>({
     resolver: zodResolver(courierSchema),
-    defaultValues: { name: '', phone: '' },
+    defaultValues: { name: '', phone: '', password: '' },
   })
 
   const createMutation = useMutation({
@@ -63,6 +64,11 @@ export function AddCourierDialog({ open, onOpenChange }: AddCourierDialogProps) 
           <Label htmlFor="phone">Телефон</Label>
           <Input id="phone" {...register('phone')} />
           {errors.phone && <p className="text-sm text-red-500 mt-1">{errors.phone.message}</p>}
+        </div>
+        <div>
+          <Label htmlFor="password">Пароль</Label>
+          <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
+          {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

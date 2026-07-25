@@ -15,12 +15,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _courierPasswordController = TextEditingController();
+  bool _obscureCourierPassword = true;
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
     _phoneController.dispose();
+    _courierPasswordController.dispose();
     super.dispose();
   }
 
@@ -44,24 +47,16 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleCourierLogin() async {
     final auth = context.read<AuthService>();
     final phone = _phoneController.text.trim();
+    final password = _courierPasswordController.text;
 
-    if (phone.isEmpty) {
-      _showError('Введите номер телефона');
+    if (phone.isEmpty || password.isEmpty) {
+      _showError('Заполните все поля');
       return;
     }
 
-    print('═══════════════════════════════════');
-    print('📱 LOGIN: Calling auth.loginCourier("$phone")');
-    print('═══════════════════════════════════');
-
     try {
-      await auth.loginCourier(phone);
-      print('📱 LOGIN: auth.loginCourier completed');
-      print('📱 LOGIN: token=${auth.token?.substring(0, auth.token!.length < 10 ? auth.token!.length : 10)}...');
-      print('📱 LOGIN: role=${auth.role}');
-      print('📱 LOGIN: courierId=${auth.courierId}');
+      await auth.loginCourier(phone, password);
     } catch (e) {
-      print('📱 LOGIN FAILED: $e');
       _showError(e.toString());
     }
   }
@@ -69,10 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red.shade700,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
     );
   }
 
@@ -117,9 +109,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Сервис управления доставкой',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey.shade600,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 48),
                 if (_selectedRole == null) _buildRoleSelector(),
@@ -220,6 +212,29 @@ class _LoginScreenState extends State<LoginScreen> {
             labelText: 'Номер телефона',
             prefixIcon: Icon(Icons.phone),
             border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _courierPasswordController,
+          obscureText: _obscureCourierPassword,
+          decoration: InputDecoration(
+            labelText: 'Пароль',
+            prefixIcon: const Icon(Icons.lock),
+            suffixIcon: IconButton(
+              onPressed: () => setState(() {
+                _obscureCourierPassword = !_obscureCourierPassword;
+              }),
+              icon: Icon(
+                _obscureCourierPassword
+                    ? Icons.visibility
+                    : Icons.visibility_off,
+              ),
+              tooltip: _obscureCourierPassword
+                  ? 'Показать пароль'
+                  : 'Скрыть пароль',
+            ),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 24),

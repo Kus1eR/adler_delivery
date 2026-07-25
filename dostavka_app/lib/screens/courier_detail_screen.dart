@@ -2,17 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/courier.dart';
 import '../models/order.dart';
 import '../services/admin_service.dart';
+import '../utils/date_format.dart';
 import 'order_detail_screen.dart';
-
-String formatOrderDate(String isoDate) {
-  final date = DateTime.parse(isoDate);
-  const months = [
-    'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
-  ];
-  return '${date.day} ${months[date.month - 1]}, '
-      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-}
 
 class CourierDetailScreen extends StatefulWidget {
   final Courier courier;
@@ -41,7 +32,9 @@ class _CourierDetailScreenState extends State<CourierDetailScreen> {
       _error = null;
     });
     try {
-      final orders = await _adminService.getOrdersByCourier(widget.courier.id);
+      final orders = await _adminService.fetchAllOrders(
+        courierId: widget.courier.id,
+      );
       if (!mounted) return;
       setState(() {
         _orders = orders;
@@ -76,15 +69,15 @@ class _CourierDetailScreenState extends State<CourierDetailScreen> {
     final theme = Theme.of(context);
     final courier = widget.courier;
     final totalOrders = _orders.length;
-    final deliveredOrders = _orders.where((o) => o.status == 'delivered').length;
+    final deliveredOrders = _orders
+        .where((o) => o.status == 'delivered')
+        .length;
     final totalEarned = _orders
         .where((o) => o.status == 'delivered')
         .fold<double>(0, (sum, o) => sum + o.courierFee);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(courier.name),
-      ),
+      appBar: AppBar(title: Text(courier.name)),
       body: RefreshIndicator(
         onRefresh: _loadOrders,
         child: ListView(
@@ -134,7 +127,9 @@ class _CourierDetailScreenState extends State<CourierDetailScreen> {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: courier.isActive
                                 ? Colors.green.withValues(alpha: 0.15)
@@ -200,11 +195,13 @@ class _CourierDetailScreenState extends State<CourierDetailScreen> {
               Center(
                 child: Column(
                   children: [
-                    Icon(Icons.error_outline, size: 48,
-                        color: Colors.red.shade400),
+                    Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red.shade400,
+                    ),
                     const SizedBox(height: 8),
-                    Text(_error!,
-                        style: TextStyle(color: Colors.red.shade700)),
+                    Text(_error!, style: TextStyle(color: Colors.red.shade700)),
                   ],
                 ),
               )
@@ -223,8 +220,10 @@ class _CourierDetailScreenState extends State<CourierDetailScreen> {
                 (order) => Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    title: Text(order.orderNumber,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    title: Text(
+                      order.orderNumber,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     subtitle: Text(
                       '${order.address} · ${formatOrderDate(order.createdAt)}',
                       maxLines: 1,
@@ -235,10 +234,13 @@ class _CourierDetailScreenState extends State<CourierDetailScreen> {
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: _statusColor(order.status)
-                                .withValues(alpha: 0.15),
+                            color: _statusColor(
+                              order.status,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
